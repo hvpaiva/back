@@ -1,24 +1,32 @@
-# What a team declares for its service, in back-gitops/apps/<app>/<env>/values.yaml.
-# The chart turns it into a Deployment, a Service, a ServiceAccount and, when
-# public, an Ingress. values.schema.json rejects anything else.
+# What a team declares about its service. It lives in the service's own
+# repository: charts/<service>/values.yaml for every stage, plus
+# values-<stage>.yaml for what differs in one stage. values.schema.json
+# rejects anything not listed here.
 
-# The image to run, with its tag. CI updates it on every build.
+application:
+  # Names the service's objects, its namespace and its address.
+  name: ""
+  # The team that owns the service. Argo CD shows it as a label.
+  team: ""
+
+# The image to run, tag included. The service's CI writes it into
+# values-<stage>.yaml on every deploy, so Git always says what runs where.
 image: ""
 
 # The port the service listens on. It must answer GET /healthz there.
 port: 8080
 
-# How much capacity the service gets: small, medium or large.
-# The platform decides what each size means (see _helpers.tpl).
+# The capacity the service gets: small, medium or large. What each size means
+# is the platform's call (_helpers.tpl).
 size: small
 
-# Whether to expose the service at http://<app>.<env>.localhost
-# (in prod: http://<app>.localhost).
+# Expose the service over HTTP, at http://<name>.<stage>.localhost
+# (http://<name>.localhost in production).
 public: false
 
-# Set by the platform (the ApplicationSet), not by teams.
+# Filled in by the platform's ApplicationSet, never by teams.
 platform:
-  # The environment, taken from the folder name in back-gitops.
-  env: dev
-  # The domain every public service is exposed under.
+  # The stage, from the branch the values were read from.
+  stage: staging
+  # The domain public services are exposed under.
   domain: localhost

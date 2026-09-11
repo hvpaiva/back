@@ -2,32 +2,46 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
-  "required": ["image"],
+  "required": ["application", "image"],
   "properties": {
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "team"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z]([a-z0-9-]{0,40}[a-z0-9])?$",
+          "description": "The service's name: lowercase letters, digits and dashes."
+        },
+        "team": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The team that owns the service."
+        }
+      }
+    },
     "image": {
       "type": "string",
       "minLength": 1,
-      "description": "The image to run, with its tag."
+      "description": "The image to run, tag included."
     },
     "port": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 65535,
-      "description": "The port the service listens on."
+      "maximum": 65535
     },
     "size": {
-      "enum": ["small", "medium", "large"],
-      "description": "How much capacity the service gets."
+      "enum": ["small", "medium", "large"]
     },
     "public": {
-      "type": "boolean",
-      "description": "Whether to expose the service over HTTP."
+      "type": "boolean"
     },
     "platform": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "env": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "stage": { "type": "string", "pattern": "^[a-z0-9-]+$" },
         "domain": { "type": "string" }
       }
     }

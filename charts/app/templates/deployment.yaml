@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ .Values.application.name }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
 spec:
@@ -15,7 +15,7 @@ spec:
       labels:
         {{- include "app.labels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ .Release.Name }}
+      serviceAccountName: {{ .Values.application.name }}
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -30,7 +30,7 @@ spec:
             - name: PORT
               value: {{ .Values.port | quote }}
             - name: APP_ENV
-              value: {{ .Values.platform.env }}
+              value: {{ .Values.platform.stage }}
             # Where this copy runs, from the Kubernetes downward API.
             - name: POD_NAME
               valueFrom:

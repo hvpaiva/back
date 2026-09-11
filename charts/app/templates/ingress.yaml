@@ -2,7 +2,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ .Values.application.name }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
 spec:
@@ -15,7 +15,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ .Release.Name }}
+                name: {{ .Values.application.name }}
                 port:
                   name: http
 {{- end }}
