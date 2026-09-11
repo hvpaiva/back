@@ -56,46 +56,11 @@ argocd:
 
 # Give Argo CD the GitHub App it uses to report deployments to GitHub (optional; reads .env)
 notifications:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -z ${GITHUB_APP_ID:-} ]]; then
-        echo "No GitHub App in .env: Argo CD won't report deployments to GitHub (optional, see the README)"
-        exit 0
-    fi
-    key_file=${GITHUB_APP_PRIVATE_KEY_FILE:?set GITHUB_APP_PRIVATE_KEY_FILE in .env}
-    key_file=${key_file/#\~/$HOME}
-    kubectl --namespace argocd create secret generic argocd-notifications-secret \
-        --from-literal=github-appID="$GITHUB_APP_ID" \
-        --from-literal=github-installationID="${GITHUB_APP_INSTALLATION_ID:?set GITHUB_APP_INSTALLATION_ID in .env}" \
-        --from-file=github-privateKey="$key_file" \
-        --dry-run=client --output yaml | kubectl apply --filename -
-    echo "GitHub App stored: Argo CD reports the next deployments to GitHub"
+    @scripts/notifications.sh
 
 # Wait until every Argo CD Application is synced and healthy (up to 10 minutes)
 wait:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # root creates the other Applications in waves: require two healthy checks in a row.
-    healthy_checks=0
-    for _ in $(seq 120); do
-        pending=$(kubectl --namespace argocd get applications --no-headers \
-            -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status 2>/dev/null |
-            awk '$2 != "Synced" || $3 != "Healthy" { print $1 }' | paste -sd ' ' -)
-        count=$(kubectl --namespace argocd get applications --no-headers 2>/dev/null | wc -l)
-        if [[ -z $pending && $count -gt 1 ]]; then
-            healthy_checks=$((healthy_checks + 1))
-            if ((healthy_checks == 2)); then
-                echo "all $count Applications are synced and healthy"
-                exit 0
-            fi
-        else
-            healthy_checks=0
-            echo "waiting for: ${pending:-the Applications root creates}"
-        fi
-        sleep 5
-    done
-    echo "gave up after 10 minutes; see http://argocd.localhost or: kubectl -n argocd get applications" >&2
-    exit 1
+    @scripts/wait.sh
 
 # Print the initial password of Argo CD's admin user
 argocd-password:
@@ -111,31 +76,11 @@ headlamp-token:
 
 # Point the lab at your forks: replaces github.com/hvpaiva/ in platform/ with your account and commits
 use-fork owner:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    files=$(git grep -l 'github.com/hvpaiva/' -- platform || true)
-    if [[ -z $files ]]; then
-        echo "platform/ doesn't reference github.com/hvpaiva/ anymore; nothing to do"
-        exit 0
-    fi
-    # perl rather than sed -i, which differs between GNU and BSD.
-    perl -pi -e 's#github\.com/hvpaiva/#github.com/{{owner}}/#g' $files
-    git commit --quiet -m "chore: point the lab at github.com/{{owner}}" -- $files
-    echo "Committed. Next: git push, then just argocd, so Argo CD reads your fork."
+    @scripts/use-fork.sh {{owner}}
 
 # Smoke-test the lab from the host
 check:
-    @curl -fsS -o /dev/null http://traefik.localhost/dashboard/ && echo "gateway     ok  http://traefik.localhost/dashboard/"
-    @curl -fsS http://localhost:4566/_localstack/health | jq -r '"localstack  ok  \(.edition) \(.version), http://localhost:4566"'
-    @curl -fsS http://argocd.localhost/api/version | jq -r '"argocd      ok  \(.Version | split("+")[0]), http://argocd.localhost (user admin, password: just argocd-password)"'
-    @curl -fsS -o /dev/null http://headlamp.localhost/ && echo "headlamp    ok  http://headlamp.localhost (token: just headlamp-token)"
-    @kubectl get providers.pkg.crossplane.io,functions.pkg.crossplane.io --output json | jq -er '.items | if length > 0 and all(any(.status.conditions[]?; .type == "Healthy" and .status == "True")) then "crossplane  ok  \(map(select(.kind == "Provider")) | length) providers and \(map(select(.kind == "Function")) | length) functions healthy (kubectl get providers,functions)" else error("some Crossplane packages are not healthy: kubectl get providers,functions") end'
-    @just _check-hello staging http://hello.staging.localhost
-    @just _check-hello production http://hello.localhost
-
-[private]
-_check-hello stage url:
-    @curl -fsS {{url}}/api/info | jq -er --arg stage {{stage}} --arg url {{url}} 'if .bucket and (.bucket.reachable | not) then error("hello in \($stage) does not reach its bucket \(.bucket.name)") else "hello       ok  \(.version) in \($stage)\(if .bucket then ", bucket \(.bucket.name)" else "" end), \($url)" end'
+    @scripts/check.sh
 
 # Delete the cluster and everything in it
 [confirm("Delete the 'back' kind cluster and everything in it? [y/N]")]

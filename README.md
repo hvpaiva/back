@@ -106,6 +106,7 @@ In this repository:
 - `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account (LocalStack). `just` installs it.
 - `platform/` is everything Argo CD delivers. `platform/root.yaml`, the only thing applied by hand, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages and its connection to LocalStack; `platform/apis/` holds the APIs services request resources through.
 - `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls: `go.yaml` checks Go services, `delivery.yaml` validates and ships any service.
+- `scripts/` holds what the longer `just` recipes run.
 - `docs/` explains [how it works](docs/how-it-works.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
 
 ## Isolation

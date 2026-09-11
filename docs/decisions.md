@@ -35,5 +35,5 @@ Why the lab is built the way it is. Most of these trade realism for something th
 
 ## Tooling
 
-- just. Readable recipes, pinned by mise like the rest of the toolchain.
+- just. Readable recipes, pinned by mise like the rest of the toolchain. Anything longer than a few lines lives in `scripts/`, so the justfile stays a list of what you can do.
 - `setup.sh` in plain bash. It has to work before mise and just exist.
