@@ -26,7 +26,7 @@ Asking Argo CD for an Application that doesn't exist returns `permission denied`
 
 ## One broken service can stop them all
 
-The ApplicationSet that creates the services' Applications reads fields from each service's `values.yaml`, such as `application.name`, and it's set to fail on a missing field (`missingkey=error`) rather than create an Application with an empty name. The failure isn't scoped to that service: generation stops for every service until the file is fixed. The chart's schema requires the same fields, so the mistake also shows up when rendering the chart, but only after the ApplicationSet has stopped.
+The ApplicationSet that creates the services' Applications reads fields from each service's `values.yaml`, such as `application.name`, and it's set to fail on a missing field (`missingkey=error`) rather than create an Application with an empty name. The failure isn't scoped to that service: generation stops for every service until the file is fixed. The chart's schema can't catch this one: it runs when an Application syncs, and that service never gets an Application. Only a check before the change is merged would.
 
 ## A dry run checks the shape, not the content
 
