@@ -1,43 +1,53 @@
+# The line between the platform and the product teams. Argo CD checks every
+# sync against the Application's project: where it may read from, where it may
+# deliver, and which cluster-wide objects it may create. Both projects sync
+# first (wave -1), before the Applications that belong to them.
+
+# Components the platform team runs: any namespace, any cluster-wide object.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: platform
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "-1"   # created before the Applications that use it
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   description: Components run by the platform team
-  sourceRepos:                           # every repo its Applications read from
+  # Every new third-party chart has to be added here first.
+  sourceRepos:
     - https://github.com/hvpaiva/back.git
     - https://argoproj.github.io/argo-helm
     - https://kubernetes-sigs.github.io/headlamp/
   destinations:
     - server: https://kubernetes.default.svc
-      namespace: "*"                     # any namespace
+      namespace: "*"
   clusterResourceWhitelist:
-    - group: "*"                         # any cluster-scoped kind: CRDs, ClusterRoles…
+    - group: "*"
       kind: "*"
 ---
+# Services from product teams: they read the services' repositories and the
+# platform's chart, run only in <service>-staging and <service>-production, and
+# may create no cluster-wide object other than those namespaces.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: apps
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "-1"   
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
-  description: Components run by the product team
+  description: Services run by product teams
   sourceRepos:
-    - https://github.com/hvpaiva/back-gitops.git
+    - https://github.com/hvpaiva/*
   destinations:
     - server: https://kubernetes.default.svc
-      namespace: "*-dev"                     
+      namespace: "*-staging"
     - server: https://kubernetes.default.svc
-      namespace: "*-prod"                     
+      namespace: "*-production"
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
-      name: "*-dev"
+      name: "*-staging"
     - group: ""
       kind: Namespace
-      name: "*-prod"
+      name: "*-production"

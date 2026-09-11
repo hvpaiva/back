@@ -1,3 +1,5 @@
+# Headlamp: a web UI for everything in the cluster, the successor of the
+# Kubernetes Dashboard. Log in with the token from `just headlamp-token`.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -20,11 +22,11 @@ spec:
                 - path: /
                   type: Prefix
   destination:
-    server: https://kubernetes.default.svc   
-    namespace: headlamp    
+    server: https://kubernetes.default.svc
+    namespace: headlamp
   syncPolicy:
     automated:
-      prune: true       
+      prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true

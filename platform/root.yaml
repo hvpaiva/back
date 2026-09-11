@@ -1,18 +1,22 @@
+# The app of apps, and the only Application applied by hand (`just argocd`
+# does it). It delivers every manifest in platform/apps/, including the
+# Application through which Argo CD manages itself. It stays in the built-in
+# `default` project because it is what creates the `platform` project.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: root
-  namespace: argocd          # Argo CD only looks for Applications in its own namespace
+  namespace: argocd
 spec:
-  project: default           # the built-in AppProject
+  project: default
   source:
     repoURL: https://github.com/hvpaiva/back.git
-    targetRevision: main     # a branch, tag or commit
-    path: platform/apps      # every manifest in this folder gets applied
+    targetRevision: main
+    path: platform/apps
   destination:
-    server: https://kubernetes.default.svc   # the cluster Argo CD runs in
-    namespace: argocd        # for resources that don't set a namespace
+    server: https://kubernetes.default.svc
+    namespace: argocd
   syncPolicy:
     automated:
-      prune: true            # file deleted from Git → object deleted from the cluster
-      selfHeal: true         # manual change in the cluster → reverted to what's in Git
+      prune: true
+      selfHeal: true

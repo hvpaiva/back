@@ -1,29 +1,34 @@
+# Argo CD managing itself. `just argocd` installs it once with Helm; this
+# Application then adopts that installation, which only works because the chart
+# version and the release name are the same as the first install's. From then
+# on, upgrading or reconfiguring Argo CD is a commit.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: argocd
-  namespace: argocd          
+  namespace: argocd
 spec:
   project: platform
   sources:
-    # 1. The manifests: the argo-cd Helm chart
     - repoURL: https://argoproj.github.io/argo-helm
-      chart: argo-cd           
-      targetRevision: 10.8.4  
+      chart: argo-cd
+      targetRevision: 10.8.4
       helm:
-        releaseName: argocd  
+        releaseName: argocd
         valueFiles:
-          - $values/platform/argocd/values.yaml   
-    # 2. The values: our repo, referenced by name, not applied
+          - $values/platform/argocd/values.yaml
+    # Where the values file above comes from.
     - repoURL: https://github.com/hvpaiva/back.git
       targetRevision: main
       ref: values
   destination:
-    server: https://kubernetes.default.svc   
-    namespace: argocd    
+    server: https://kubernetes.default.svc
+    namespace: argocd
   syncPolicy:
     automated:
-      prune: true       
+      prune: true
       selfHeal: true
     syncOptions:
+      # Argo CD's own CRDs are too large for client-side apply, which keeps a
+      # copy of each object in an annotation capped at 256 KB.
       - ServerSideApply=true
