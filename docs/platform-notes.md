@@ -84,7 +84,7 @@ Argo CD ships health checks for Crossplane's kinds and for the providers' manage
 
 ## Inactive resource types look like they're provisioning
 
-The S3 provider ships 50 resource types and the activation policy turns on two; the rest get a definition but no CRD. Argo CD's built-in check for Crossplane's kinds knows nothing about activation, so under the provider in Argo CD's tree, 48 definitions stayed *Progressing*, "Provisioning ...", for good. Nothing was wrong, and the Application stayed *Healthy*: it only counts its own resources. `platform/argocd/values.yaml` shows inactive definitions as *Suspended*.
+The S3 provider ships 50 resource types and the activation policy turns on two; the rest get a definition but no CRD. Argo CD's built-in check for Crossplane's kinds knows nothing about activation, so under the provider in Argo CD's tree, 48 definitions stayed *Progressing*, "Provisioning ...", for good. Nothing was wrong, and the Application stayed *Healthy*: it only counts its own resources. `platform/argocd/values.yaml` shows inactive definitions as *Suspended*. The new check only showed after a hard refresh of the Application (`argocd app get crossplane --hard-refresh`); until then, the definitions, which never change, kept the health the old check had given them.
 
 ## Deleting a namespace strands its managed resources
 
@@ -101,3 +101,9 @@ A provider compares each managed resource with the cloud every ten minutes by de
 ## The argocd CLI and Traefik
 
 Before logging in, `argocd login` probes the server for TLS. Traefik answers that probe with its default certificate, even on port 80, and the CLI then stops to ask whether to proceed. `just argocd-login` skips the probe (`--skip-test-tls`), and `ARGOCD_OPTS` in `mise.toml` sets `--grpc-web --plaintext` for every command.
+
+`just argocd-login <user>` names the CLI's context after the user. To switch, log in again: `argocd context <name>` writes a file under `~/.config/argocd`, outside the lab's own config, and fails.
+
+## Argo CD has permissions of its own
+
+Argo CD reads the cluster with its own ServiceAccount and decides what each user sees with its own RBAC, per Application rather than per resource: whoever can see an Application sees every resource in its tree. For `dev`, that's what kubectl's `view` shows in its services' namespaces, plus the Secrets' metadata and key names, which kubectl hides; the values are masked (`++++++++`). Argo CD only masks the `data` and `stringData` of Secrets, though. A password in a ConfigMap, or in a custom resource's spec or status, would show in full, which is why the platform's APIs hand out credentials in Secrets only. The two systems also drift apart as teams arrive: every developer sees every service in the `apps` project, logs included, while kubectl keeps each team to its own namespaces. A project per team would keep them aligned.
