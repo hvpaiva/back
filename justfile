@@ -113,6 +113,8 @@ check:
     @curl -fsS http://localhost:4566/_localstack/health | jq -r '"localstack  ok  \(.edition) \(.version), http://localhost:4566"'
     @curl -fsS http://argocd.localhost/api/version | jq -r '"argocd      ok  \(.Version | split("+")[0]), http://argocd.localhost (user admin, password: just argocd-password)"'
     @curl -fsS -o /dev/null http://headlamp.localhost/ && echo "headlamp    ok  http://headlamp.localhost (token: just headlamp-token)"
+    @curl -fsS http://hello.staging.localhost/api/info | jq -r '"hello       ok  \(.version) in staging, http://hello.staging.localhost"'
+    @curl -fsS http://hello.localhost/api/info | jq -r '"hello       ok  \(.version) in production, http://hello.localhost"'
 
 # Delete the cluster and everything in it
 [confirm("Delete the 'back' kind cluster and everything in it? [y/N]")]
