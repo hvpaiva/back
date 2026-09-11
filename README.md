@@ -66,7 +66,7 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 | LocalStack | http://localhost:4566 (`aws s3 ls` from this directory lists its buckets) |
 | Crossplane | No UI of its own: the `crossplane` Application in Argo CD, or `kubectl get providers,functions` |
 
-`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 3.5 GB of RAM and 8 GB of disk.
+`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 4 GB of RAM and 8 GB of disk.
 
 Run this way, the lab follows the repositories above on GitHub. Everything works and you can inspect all of it, but you can't change what it deploys: Argo CD reads GitHub, not your disk.
 

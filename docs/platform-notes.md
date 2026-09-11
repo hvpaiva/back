@@ -54,6 +54,10 @@ Validation fails the pull request's check, but GitHub still lets someone merge i
 
 With code and configuration in the same branch, one change reaches staging as two commits: the developer's, then the one CI makes after building the image. Argo CD applies both, so both get a green `argocd/hello-staging` check and a staging deployment on GitHub. The first one only means the configuration at that commit is applied, and it still points to the previous image. The code is live when CI's commit, the one naming the new image, gets its check. Running a separate branch that only CI writes to would avoid this, at the cost of one more moving part.
 
+## A promotion can conflict with edits near the image
+
+On `main`, CI rewrites `image:` in `values-production.yaml` on every promotion, and `staging` never receives those commits. An edit on `staging` right next to that line (here, the comment above it) conflicts the next time `staging` is merged into `main`. Merge `main` into `staging` and keep `main`'s image, which the promotion overwrites anyway. Keeping the line CI owns away from what people edit, or in a file of its own, avoids the conflict altogether.
+
 ## Commits from CI don't trigger CI
 
 The service's CI commits the new image to its own repository. Commits pushed with the workflow's built-in token don't start new workflow runs, which is what keeps that from looping.
@@ -80,7 +84,7 @@ Delete a namespace that still holds a managed resource and the resource stays be
 
 ## Waves in an app of apps don't wait by default
 
-Sync waves order the resources of one Application, and Argo CD waits for each wave to be healthy before the next. But Argo CD 1.8 stopped assessing the health of Applications themselves, so a root Application applies all its children at once. The services would then be created before the APIs their requests use. `platform/argocd/values.yaml` restores that health check, and root waits: Crossplane, then the APIs, then the services. The cost is that a child that never becomes healthy holds back every later wave.
+Sync waves order the resources of one Application, and Argo CD waits for each wave to be healthy before the next. But Argo CD 1.8 stopped assessing the health of Applications themselves, so a root Application applies all its children at once. The services would then be created before the APIs their requests use. `platform/argocd/values.yaml` restores that health check, and root waits: Crossplane, then the APIs, then the services. The cost is that a child that never becomes healthy holds back every later wave. And a child can look healthy for a moment between its own waves: on a fresh install, root moved on as soon as Crossplane itself was up, before its providers were installed. Harmless here, since the APIs only need Crossplane and the services' requests wait for the providers, but a child's health doesn't mean it has finished syncing.
 
 ## Drift is checked every ten minutes
 

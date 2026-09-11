@@ -187,7 +187,7 @@ if [[ -z $ram_gib ]]; then
 elif ((ram_gib >= min_ram_gib)); then
   ok "$ram_gib GiB of RAM"
 else
-  warn "$ram_gib GiB of RAM: the lab uses about 3.5 GiB and grows as components are added ($min_ram_gib GiB recommended)"
+  warn "$ram_gib GiB of RAM: the lab uses about 4 GiB and grows as components are added ($min_ram_gib GiB recommended)"
 fi
 
 docker_dir=/var/lib/docker
