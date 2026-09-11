@@ -36,6 +36,12 @@ The ApplicationSet that creates the services' Applications reads fields from eac
 
 Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.
 
+## Telling GitHub what was deployed
+
+Argo CD's GitHub notifications only sign in as a GitHub App, not with a personal token. The app's key lives in a Secret created by `just notifications` from a local file. The Argo CD chart normally creates that Secret itself, empty, so the lab turns that off and the Secret belongs to whoever creates it, outside Git.
+
+Two settings in the notification template are easy to get wrong. A service's Application has two sources, the platform's chart and the service's repository, so the status has to go to the second one (`sources[1]` and its revision), not to the chart's repository. And `autoMerge` must be off: on, GitHub tries to merge the default branch into the branch being deployed.
+
 ## Commits from CI don't trigger CI
 
 The service's CI commits the new image to its own repository. Commits pushed with the workflow's built-in token don't start new workflow runs, which is what keeps that from looping.

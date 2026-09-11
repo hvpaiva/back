@@ -25,7 +25,7 @@ size: medium
 Stages are branches: `staging` deploys to staging, `main` to production.
 
 1. Push to `staging`. CI runs the tests, builds the image, tags it with the commit (`sha-<commit>`) and commits that image to `values-staging.yaml` on the same branch. In GitHub you see the workflow run and a commit from `github-actions[bot]`.
-2. Argo CD notices the commit. It checks the repository every minute, so the `hello-staging` Application goes *OutOfSync*, then *Synced*, while the new pods roll out (*Progressing*) until they're ready (*Healthy*). The Argo CD UI shows each of those steps; Headlamp shows the pods themselves.
+2. Argo CD notices the commit. It checks the repository every minute, so the `hello-staging` Application goes *OutOfSync*, then *Synced*, while the new pods roll out (*Progressing*) until they're ready (*Healthy*). The Argo CD UI shows each of those steps; Headlamp shows the pods themselves. If the lab has a GitHub App configured, GitHub shows the outcome too: the deployed commit gets an `argocd/hello-staging` status, and the version appears under the repository's Deployments.
 3. The page updates itself. http://hello.staging.localhost reloads when the new version answers, and the hang tag's barcode changes with the version.
 4. Promote with a pull request from `staging` to `main`. Merging it makes CI copy the image staging was running into `values-production.yaml`. Nothing is rebuilt, so production runs exactly what was tested.
 5. Roll back by reverting the commit that changed the image. Argo CD puts the previous version back.

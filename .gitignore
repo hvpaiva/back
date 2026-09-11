@@ -3,3 +3,6 @@
 
 # argocd CLI login for the lab
 .argocd/
+
+# Local settings, such as the GitHub App (see .env.example)
+.env

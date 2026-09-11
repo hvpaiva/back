@@ -24,3 +24,78 @@ server:
 # Single sign-on isn't used in the lab: you log in with a local user.
 dex:
   enabled: false
+
+# Argo CD reports the services' deployments to GitHub: a status on the deployed
+# commit and an entry in the repository's Deployments. It signs in as a GitHub
+# App whose credentials live in a Secret created by `just notifications`, never
+# in Git, so the chart must not manage that Secret.
+notifications:
+  argocdUrl: http://argocd.localhost
+  secret:
+    create: false
+  notifiers:
+    service.github: |
+      appID: $github-appID
+      installationID: $github-installationID
+      privateKey: $github-privateKey
+  # Every service reports; the services' ApplicationSet labels them with a stage.
+  subscriptions:
+    - recipients:
+        - github
+      selector: stage
+      triggers:
+        - on-deployed
+        - on-degraded
+        - on-sync-failed
+  triggers:
+    trigger.on-deployed: |
+      - description: A new version is synced and healthy
+        oncePer: app.status.sync.revisions[1]
+        when: app.status.operationState != nil and app.status.operationState.phase == 'Succeeded' and app.status.health.status == 'Healthy'
+        send: [github-success]
+    trigger.on-degraded: |
+      - description: The running version stopped being healthy
+        when: app.status.health.status == 'Degraded'
+        send: [github-failure]
+    trigger.on-sync-failed: |
+      - description: The new version couldn't be applied
+        when: app.status.operationState != nil and app.status.operationState.phase in ['Error', 'Failed']
+        send: [github-failure]
+  # A service's Application has two sources: the platform's chart, then the
+  # service's repository (index 1). The status and the deployment go to the
+  # commit of the service's repository that was deployed. autoMerge stays off:
+  # on, GitHub would try to merge the default branch into the deployed one.
+  templates:
+    template.github-success: |
+      message: "{{ .app.metadata.name }} is synced and healthy"
+      github:
+        repoURLPath: "{{ (index .app.spec.sources 1).repoURL }}"
+        revisionPath: "{{ index .app.status.sync.revisions 1 }}"
+        status:
+          state: success
+          label: "argocd/{{ .app.metadata.name }}"
+          targetURL: "{{ .context.argocdUrl }}/applications/{{ .app.metadata.name }}"
+        deployment:
+          state: success
+          environment: "{{ .app.metadata.labels.stage }}"
+          environmentURL: 'http://{{ (index .app.spec.sources 0).helm.releaseName }}{{ if ne .app.metadata.labels.stage "production" }}.{{ .app.metadata.labels.stage }}{{ end }}.localhost'
+          logURL: "{{ .context.argocdUrl }}/applications/{{ .app.metadata.name }}"
+          requiredContexts: []
+          autoMerge: false
+          transientEnvironment: false
+    template.github-failure: |
+      message: "{{ .app.metadata.name }}: sync {{ .app.status.operationState.phase }}, health {{ .app.status.health.status }}"
+      github:
+        repoURLPath: "{{ (index .app.spec.sources 1).repoURL }}"
+        revisionPath: "{{ index .app.status.sync.revisions 1 }}"
+        status:
+          state: failure
+          label: "argocd/{{ .app.metadata.name }}"
+          targetURL: "{{ .context.argocdUrl }}/applications/{{ .app.metadata.name }}"
+        deployment:
+          state: failure
+          environment: "{{ .app.metadata.labels.stage }}"
+          logURL: "{{ .context.argocdUrl }}/applications/{{ .app.metadata.name }}"
+          requiredContexts: []
+          autoMerge: false
+          transientEnvironment: false

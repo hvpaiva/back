@@ -1,5 +1,8 @@
 # Lab lifecycle. Run `just` to list the recipes.
 
+# Optional settings, such as the GitHub App for deploy statuses (see .env.example).
+set dotenv-load
+
 cluster_name := "back"
 # The Gateway API version Traefik v3.7 is built against.
 gateway_api_version := "v1.6.1"
@@ -18,7 +21,7 @@ default:
     @just --list --unsorted
 
 # Create the cluster, the base layer and Argo CD, then wait for Argo CD to deliver the rest (idempotent)
-up: preflight cluster gateway localstack argocd wait check
+up: preflight cluster gateway localstack argocd notifications wait check
 
 # Check that this machine is ready for the lab (./setup.sh fixes what it can)
 preflight:
@@ -53,6 +56,24 @@ argocd:
     fi
     # The app of apps: delivers every Application in platform/apps/, Argo CD's own included.
     kubectl apply -f platform/root.yaml
+
+# Give Argo CD the GitHub App it uses to report deployments to GitHub (optional; reads .env)
+notifications:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -z ${GITHUB_APP_ID:-} ]]; then
+        echo "No GitHub App in .env: Argo CD won't report deployments to GitHub (optional, see the README)"
+        exit 0
+    fi
+    key_file=${GITHUB_APP_PRIVATE_KEY_FILE:?set GITHUB_APP_PRIVATE_KEY_FILE in .env}
+    key_file=${key_file/#\~/$HOME}
+    # The key is read from disk into the cluster; it never goes into Git.
+    kubectl --namespace argocd create secret generic argocd-notifications-secret \
+        --from-literal=github-appID="$GITHUB_APP_ID" \
+        --from-literal=github-installationID="${GITHUB_APP_INSTALLATION_ID:?set GITHUB_APP_INSTALLATION_ID in .env}" \
+        --from-file=github-privateKey="$key_file" \
+        --dry-run=client --output yaml | kubectl apply --filename -
+    echo "GitHub App stored: Argo CD reports the next deployments to GitHub"
 
 # Wait until every Argo CD Application is synced and healthy (up to 10 minutes)
 wait:

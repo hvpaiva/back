@@ -74,6 +74,15 @@ Watching a change flow through the lab means pushing to repositories Argo CD wat
 
 Then push a change to your back-hello `staging` branch. CI builds `ghcr.io/<you>/back-hello` and commits the new image, and within a minute or so Argo CD rolls it out: the page at http://hello.staging.localhost reloads with the new version. If the pods can't pull the image, GitHub created the package as private; make it public in the package settings.
 
+### Deploy status in GitHub (optional)
+
+Argo CD can report each deployment back to GitHub: the deployed commit gets an `argocd/<service>-<stage>` status, and your back-hello's Deployments list staging and production with their addresses. It signs in as a GitHub App, which you create once:
+
+1. At https://github.com/settings/apps/new, name the app, set any homepage URL, uncheck *Webhook → Active*, and give it *Read and write* access to *Commit statuses* and *Deployments*.
+2. On the app's page, note the *App ID* and generate a private key. A `.pem` file downloads.
+3. Install the app on your account, for your back-hello fork only. The number at the end of the installation's URL is the *Installation ID*.
+4. Copy `.env.example` to `.env`, fill in the three values, and run `just notifications`. `just up` repeats that step whenever it recreates the cluster.
+
 ## How it's put together
 
 | Repository | What it holds |
