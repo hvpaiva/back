@@ -47,7 +47,7 @@ The platform team owns this repository.
 
 ### Argo CD and what it delivers
 
-`just up` installs Argo CD with Helm and applies the projects and `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp, Crossplane and the cluster's RBAC, then the platform's APIs, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
+`just up` installs Argo CD with Helm and applies the projects and `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp, Crossplane, CloudNativePG and the cluster's RBAC, then the platform's APIs, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
 
 | Project | May read from | May deliver to | Cluster-wide objects |
 |---|---|---|---|

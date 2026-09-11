@@ -1,0 +1,28 @@
+# The Postgres operator behind the Database API.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudnative-pg
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: https://cloudnative-pg.github.io/charts
+    chart: cloudnative-pg
+    targetRevision: 0.29.0
+    helm:
+      valuesObject:
+        rbac:
+          # Puts reading Postgres clusters in Kubernetes' view role, which the developer role aggregates.
+          aggregateClusterRoles: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Its Cluster CRD exceeds client-side apply's 256 KB annotation limit.
+      - ServerSideApply=true

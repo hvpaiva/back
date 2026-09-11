@@ -1,0 +1,13 @@
+# Crossplane manages managed resources and the core kinds it runs packages with. Any other
+# kind a Composition creates needs a grant here.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: crossplane-compose
+  labels:
+    rbac.crossplane.io/aggregate-to-crossplane: "true"
+rules:
+  # Database
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: ["*"]

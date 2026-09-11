@@ -13,6 +13,7 @@ spec:
     - https://argoproj.github.io/argo-helm
     - https://kubernetes-sigs.github.io/headlamp/
     - https://charts.crossplane.io/stable
+    - https://cloudnative-pg.github.io/charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"

@@ -22,7 +22,7 @@ configs:
       end
       return hs
     # Argo CD has no check for the platform's own kinds, one key per kind: ConfigMap keys can't hold `*`.
-    resource.customizations.health.back.lab_Bucket: |
+    resource.customizations.health.back.lab_Bucket: &request-health |
       local ready, synced
       for _, c in ipairs(obj.status and obj.status.conditions or {}) do
         if c.type == "Ready" then ready = c end
@@ -35,6 +35,7 @@ configs:
         return {status = "Healthy"}
       end
       return {status = "Progressing", message = ready and (ready.message or ready.reason) or "Waiting for Crossplane"}
+    resource.customizations.health.back.lab_Database: *request-health
     # The built-in check says Degraded while a provider starts, failing its sync.
     resource.customizations.health.pkg.crossplane.io_Provider: |
       local installed, healthy = false, false
