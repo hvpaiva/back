@@ -10,7 +10,7 @@ Tested on Ubuntu 24.04, where `setup.sh` also installs what's missing. On other 
 
 ```sh
 ./setup.sh   # check this machine and offer to install what's missing
-just up      # create the cluster and the base layer (idempotent, ~1 min)
+just up      # create the cluster, the base layer and Argo CD (idempotent, ~2 min)
 just         # list every recipe
 just down    # delete the cluster
 ```
@@ -19,7 +19,7 @@ just down    # delete the cluster
 
 If mise isn't active in your shell, prefix commands with `mise exec --`, as in `mise exec -- just up`.
 
-The base layer uses about 1 GB of RAM and 4 GB of disk.
+The base layer and Argo CD use about 1.5 GB of RAM and 5 GB of disk.
 
 ## What's running
 
@@ -28,6 +28,7 @@ The base layer uses about 1 GB of RAM and 4 GB of disk.
 | kind, Kubernetes 1.35 | The single-node cluster the whole lab lives in | `kubectl`, from this directory |
 | Traefik 3.7 | Entry point, serving both Ingress and Gateway API | `http://<name>.localhost`; dashboard at http://traefik.localhost/dashboard/ |
 | LocalStack 4.14.0 | Stands in for AWS (S3, SQS, DynamoDB, …) | `http://localhost:4566` from the host; `http://localstack.localstack.svc:4566` from pods |
+| Argo CD 3.5 | Delivers everything above the base layer from Git | http://argocd.localhost (user `admin`, password from `just argocd-password`); `just argocd-login` logs the `argocd` CLI in |
 
 To expose something, point an `Ingress` (class `traefik`, the default) or an `HTTPRoute` (parent: Gateway `traefik-gateway` in namespace `traefik`) at a hostname ending in `.localhost`.
 
@@ -36,15 +37,17 @@ To expose something, point an `Ingress` (class `traefik`, the default) or an `HT
 Inside this directory, `mise.toml` sets:
 
 - `KUBECONFIG` to `.kube/config` (git-ignored), so `kubectl` and `helm` can only reach the lab cluster.
+- `ARGOCD_OPTS`, so the `argocd` CLI keeps its login in `.argocd/` (git-ignored) instead of `~/.config/argocd`.
 - `AWS_ENDPOINT_URL` and dummy credentials, so every AWS call goes to LocalStack even if real AWS profiles are configured.
 
-The justfile exports the same `KUBECONFIG`, so its recipes only ever touch the lab cluster. Host ports are bound to `127.0.0.1` only.
+The justfile exports the same `KUBECONFIG` and `ARGOCD_OPTS`, so its recipes only ever touch the lab cluster. Host ports are bound to `127.0.0.1` only.
 
 `*.localhost` resolves to this machine only on the host. Inside the cluster, use Service DNS names (`<service>.<namespace>.svc`).
 
 ## Layout
 
-`cluster/` holds the base layer: what an infrastructure team would hand us (a cluster, an ingress, a cloud account). It's installed by `just`, not by GitOps. From phase 1 on, everything above the base layer is declared in Git and delivered by Argo CD.
+- `cluster/` holds the base layer: what an infrastructure team would hand us (a cluster, an ingress, a cloud account). It's installed by `just`, not by GitOps.
+- `platform/` holds what the platform team runs on top, declared in Git and delivered by Argo CD, starting with Argo CD itself. `just argocd` installs it once from `platform/argocd/values.yaml`; after that, a change to that file takes effect when it's pushed.
 
 ## Decisions
 
@@ -53,6 +56,8 @@ The justfile exports the same `KUBECONFIG`, so its recipes only ever touch the l
 - **Traefik.** It serves Ingress and Gateway API at the same time, so a platform abstraction can move from one to the other without changes to the cluster. ingress-nginx reached end of life in March 2026.
 - **Gateway API CRDs v1.6.1, installed before Traefik.** It's the version Traefik 3.7 is built against.
 - **LocalStack 4.14.0, pinned by digest.** The Community edition ended on 2026-03-23. Newer images require an account and an auth token, and the free plan covers non-commercial use only. 4.14.0 is the last Community release: it runs without a token but gets no updates or security patches, and it never included RDS. State is kept in memory, so restarting the pod wipes it.
+- **Argo CD installed once with Helm, then managing itself.** The bootstrap is the only step that isn't GitOps; from then on, upgrading or reconfiguring Argo CD is a commit.
+- **Argo CD polls Git every minute.** GitHub can't send webhooks to a cluster on a laptop, so changes show up within a minute or so of a push (the default is up to three). The Refresh button in the UI, or `argocd app get <app> --refresh`, checks immediately.
 - **just.** Readable recipes, pinned by mise like the rest of the toolchain.
 - **`setup.sh` in plain bash.** It has to work before mise and just exist.
 - **Public repositories on a personal GitHub account.** Nothing touches company organizations.
@@ -62,7 +67,7 @@ The justfile exports the same `KUBECONFIG`, so its recipes only ever touch the l
 | Phase | Outcome | Status |
 |---|---|---|
 | 0. Base layer | `just up` creates the cluster, the gateway and LocalStack | Done |
-| 1. GitOps first | Argo CD manages itself and the platform; sample app via ApplicationSet; CI builds the image and bumps the tag in Git; promotion between environments via PR | Next |
+| 1. GitOps first | Argo CD manages itself and the platform; sample app via ApplicationSet; CI builds the image and bumps the tag in Git; promotion between environments via PR | In progress |
 | 2. Crossplane | `Bucket`, `Database` and `App` platform APIs, delivered by Argo CD | |
 | 3. Evolving the platform | Composition revisions (Ingress → Gateway API), a second implementation behind the same API, adopting Terraform-managed resources, drift correction | |
 | 4. Kyverno | CEL policies on the platform APIs, audit → enforce, team onboarding via generate rules, policy checks in CI | |

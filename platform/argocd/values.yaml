@@ -1,0 +1,25 @@
+# Values for the argo-cd Helm chart (see the version in the justfile).
+# `just argocd` installs Argo CD once with these values; after that, Argo CD
+# manages itself from Git, and a change here takes effect after it's pushed.
+
+global:
+  domain: argocd.localhost
+
+configs:
+  cm:
+    # GitHub can't send webhooks to a local cluster, so Argo CD polls Git
+    # instead: every 60s plus up to 10s of jitter (chart default: 120s + 60s).
+    timeout.reconciliation: 60s
+    timeout.reconciliation.jitter: 10s
+  params:
+    # Traefik serves the lab over plain HTTP, so the server doesn't use TLS.
+    server.insecure: true
+
+server:
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+
+# Single sign-on isn't used in the lab: you log in with a local user.
+dex:
+  enabled: false

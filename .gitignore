@@ -1,2 +1,5 @@
 # Lab kubeconfig (credentials for the local cluster)
 .kube/
+
+# argocd CLI login for the lab
+.argocd/

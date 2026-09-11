@@ -9,6 +9,8 @@ kind = "0.33.0"
 # Matches the cluster's Kubernetes minor (see cluster/kind.yaml).
 kubectl = "1.35.8"
 helm = "4.3.0"
+# Matches the Argo CD version installed by `just argocd`.
+argocd = "3.5.2"
 # Talks to LocalStack; see the AWS_* variables below.
 aws-cli = "2.36.43"
 # Used by `just check`.
@@ -18,6 +20,10 @@ jq = "1.8.2"
 # Isolation: inside this directory, kubectl and helm only see the lab cluster.
 # Its kubeconfig lives in .kube/ (git-ignored), never in ~/.kube/config.
 KUBECONFIG = "{{config_root}}/.kube/config"
+
+# The argocd CLI keeps its login in .argocd/ (git-ignored), not in ~/.config/argocd,
+# and reaches the server through Traefik over plain HTTP.
+ARGOCD_OPTS = "--config {{config_root}}/.argocd/config --grpc-web --plaintext"
 
 # Every AWS call made from this directory goes to LocalStack, never to a real
 # account, even if you have AWS credentials or profiles configured elsewhere.

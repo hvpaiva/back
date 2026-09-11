@@ -5,16 +5,19 @@ cluster_name := "back"
 gateway_api_version := "v1.6.1"
 # Traefik v3.7.13.
 traefik_chart_version := "41.5.0"
+# Argo CD v3.5.2.
+argocd_chart_version := "10.8.4"
 
 # Same isolation as mise.toml: recipes only ever touch the lab cluster.
 export KUBECONFIG := justfile_directory() / ".kube/config"
+export ARGOCD_OPTS := "--config " + justfile_directory() / ".argocd/config" + " --grpc-web --plaintext"
 
 [private]
 default:
     @just --list --unsorted
 
-# Create the cluster and install the base layer (idempotent)
-up: preflight cluster gateway localstack check
+# Create the cluster, the base layer and Argo CD (idempotent)
+up: preflight cluster gateway localstack argocd check
 
 # Check that this machine is ready for the lab (./setup.sh fixes what it can)
 preflight:
@@ -37,10 +40,30 @@ localstack:
     kubectl apply -f cluster/localstack.yaml
     kubectl --namespace localstack rollout status deployment/localstack --timeout=5m
 
-# Smoke-test the base layer from the host
+# Install Argo CD once; after that, it manages itself from Git
+argocd:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if kubectl --namespace argocd get application argocd >/dev/null 2>&1; then
+        echo "Argo CD already manages itself: change platform/argocd/values.yaml and push instead"
+        exit 0
+    fi
+    helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version {{argocd_chart_version}} \
+        --namespace argocd --create-namespace --values platform/argocd/values.yaml --wait
+
+# Print the initial password of Argo CD's admin user
+argocd-password:
+    @kubectl --namespace argocd get secret argocd-initial-admin-secret --output jsonpath='{.data.password}' | base64 --decode && echo
+
+# Log the argocd CLI in as admin
+argocd-login:
+    @argocd login argocd.localhost:80 --skip-test-tls --username admin --password "$(just argocd-password)"
+
+# Smoke-test the lab from the host
 check:
     @curl -fsS -o /dev/null http://traefik.localhost/dashboard/ && echo "gateway     ok  http://traefik.localhost/dashboard/"
     @curl -fsS http://localhost:4566/_localstack/health | jq -r '"localstack  ok  \(.edition) \(.version), http://localhost:4566"'
+    @curl -fsS http://argocd.localhost/api/version | jq -r '"argocd      ok  \(.Version | split("+")[0]), http://argocd.localhost (user admin, password: just argocd-password)"'
 
 # Delete the cluster and everything in it
 [confirm("Delete the 'back' kind cluster and everything in it? [y/N]")]
