@@ -61,6 +61,10 @@ argocd-password:
 argocd-login:
     @argocd login argocd.localhost:80 --skip-test-tls --username admin --password "$(just argocd-password)"
 
+# Print a token to log in to Headlamp (as its ServiceAccount, a cluster admin; valid for 24h)
+headlamp-token:
+    @kubectl --namespace headlamp create token headlamp --duration 24h
+
 # Smoke-test the lab from the host
 check:
     @curl -fsS -o /dev/null http://traefik.localhost/dashboard/ && echo "gateway     ok  http://traefik.localhost/dashboard/"

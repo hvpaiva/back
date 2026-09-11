@@ -29,6 +29,7 @@ The base layer and Argo CD use about 1.5 GB of RAM and 5 GB of disk.
 | Traefik 3.7 | Entry point, serving both Ingress and Gateway API | `http://<name>.localhost`; dashboard at http://traefik.localhost/dashboard/ |
 | LocalStack 4.14.0 | Stands in for AWS (S3, SQS, DynamoDB, …) | `http://localhost:4566` from the host; `http://localstack.localstack.svc:4566` from pods |
 | Argo CD 3.5 | Delivers everything above the base layer from Git | http://argocd.localhost (user `admin`, password from `just argocd-password`); `just argocd-login` logs the `argocd` CLI in |
+| Headlamp 0.45 | Web UI for everything in the cluster (the successor of the Kubernetes Dashboard) | http://headlamp.localhost, with a token from `just headlamp-token` |
 
 To expose something, point an `Ingress` (class `traefik`, the default) or an `HTTPRoute` (parent: Gateway `traefik-gateway` in namespace `traefik`) at a hostname ending in `.localhost`.
 
