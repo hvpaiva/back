@@ -9,6 +9,10 @@ configs:
     timeout.reconciliation: 60s
     timeout.reconciliation.jitter: 10s
     ui.bannercontent: "BACK lab"
+    # The lab's identities, with passwords from `just identities`.
+    accounts.dev: login
+    accounts.platform-admin: login
+    admin.enabled: false
     # Lets root wait for each wave of Applications to be healthy; off by default since 1.8.
     resource.customizations.health.argoproj.io_Application: |
       local hs = {status = "Progressing", message = ""}
@@ -62,6 +66,14 @@ configs:
     resourceExclusionsAdditional:
       - apiGroups: ["*"]
         kinds: [ProviderConfigUsage]
+  rbac:
+    policy.csv: |
+      p, role:developer, applications, get, apps/*, allow
+      p, role:developer, applications, sync, apps/*, allow
+      p, role:developer, logs, get, apps/*, allow
+      p, role:developer, projects, get, apps, allow
+      g, dev, role:developer
+      g, platform-admin, role:admin
   params:
     # Traefik serves plain HTTP.
     server.insecure: true

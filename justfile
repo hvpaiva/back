@@ -18,7 +18,7 @@ default:
     @just --list --unsorted
 
 # Create the cluster, the base layer and Argo CD, then wait for Argo CD to deliver the rest (idempotent)
-up: preflight cluster gateway localstack argocd notifications wait check
+up: preflight cluster gateway localstack argocd identities notifications wait check
 
 # Check that this machine is ready for the lab (./setup.sh fixes what it can)
 preflight:
@@ -42,7 +42,7 @@ localstack:
     kubectl apply --server-side --force-conflicts -f cluster/coredns.yaml
     kubectl --namespace localstack rollout status deployment/localstack --timeout=5m
 
-# Install Argo CD once and apply the root Application; from then on, Argo CD manages itself from Git
+# Install Argo CD once and apply the projects and the root Application; from then on, Argo CD manages itself from Git
 argocd:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -52,7 +52,11 @@ argocd:
         helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version {{argocd_chart_version}} \
             --namespace argocd --create-namespace --values platform/argocd/values.yaml --wait
     fi
-    kubectl apply -f platform/root.yaml
+    kubectl apply -f platform/apps/projects.yaml -f platform/root.yaml
+
+# Give dev and platform-admin a kubectl context and an Argo CD password (idempotent)
+identities:
+    @scripts/identities.sh
 
 # Give Argo CD the GitHub App it uses to report deployments to GitHub (optional; reads .env)
 notifications:
@@ -62,13 +66,13 @@ notifications:
 wait:
     @scripts/wait.sh
 
-# Print the initial password of Argo CD's admin user
-argocd-password:
-    @kubectl --namespace argocd get secret argocd-initial-admin-secret --output jsonpath='{.data.password}' | base64 --decode && echo
+# Print the Argo CD password of platform-admin or dev
+argocd-password user="platform-admin":
+    @kubectl --namespace argocd get secret argocd-account-passwords --output jsonpath='{.data.{{user}}}' | base64 --decode && echo
 
-# Log the argocd CLI in as admin
-argocd-login:
-    @argocd login argocd.localhost:80 --skip-test-tls --username admin --password "$(just argocd-password)"
+# Log the argocd CLI in as platform-admin or dev
+argocd-login user="platform-admin":
+    @argocd login argocd.localhost:80 --skip-test-tls --username {{user}} --password "$(just argocd-password {{user}})" --name {{user}}
 
 # Print a token to log in to Headlamp (as its ServiceAccount, a cluster admin; valid for 24h)
 headlamp-token:
@@ -86,3 +90,4 @@ check:
 [confirm("Delete the 'back' kind cluster and everything in it? [y/N]")]
 down:
     kind delete cluster --name {{cluster_name}}
+    @scripts/identities.sh remove

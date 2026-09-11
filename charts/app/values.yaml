@@ -4,6 +4,7 @@
 application:
   # Names its objects, its namespace and its address.
   name: ""
+  # Can read the service's namespaces, as the Kubernetes group of that name.
   team: ""
 
 # Written into values-<stage>.yaml by the delivery workflow on every deploy.

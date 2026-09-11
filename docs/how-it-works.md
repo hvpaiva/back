@@ -10,7 +10,7 @@ The service's repository has everything the developer touches: code, tests, a CI
 # charts/hello/values.yaml: every stage
 application:
   name: hello
-  team: platform
+  team: team-a
 port: 8080
 size: small
 public: true
@@ -43,16 +43,19 @@ The platform team owns this repository.
 
 ### The base layer
 
-`cluster/` is what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account, installed once by `just up`. Nothing above it is installed by hand except one file.
+`cluster/` is what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account, installed once by `just up`. Above it, only the bootstrap is applied by hand: Argo CD's first install, its projects and the root Application.
 
 ### Argo CD and what it delivers
 
-`just up` installs Argo CD with Helm and applies `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp and Crossplane, then the platform's APIs, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
+`just up` installs Argo CD with Helm and applies the projects and `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp, Crossplane and the cluster's RBAC, then the platform's APIs, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
 
 | Project | May read from | May deliver to | Cluster-wide objects |
 |---|---|---|---|
 | `platform` | this repository and approved Helm repositories | any namespace | any |
 | `apps` | the services' repositories and the platform's chart | `*-staging` and `*-production` | only those namespaces |
+| `default` | nothing | nowhere | none |
+
+`default` is the project Argo CD creates for Applications that don't name one. It's closed, so every Application has to say which rules it follows.
 
 ### From service repositories to Applications
 
@@ -73,13 +76,26 @@ Services call them at `main`, so a fix reaches all of them at once.
 
 `platform/apis/` holds the APIs services request resources through. The first is `Bucket` (`back.lab/v1alpha1`): a service asks for one with `bucket:` in its values, the chart renders the request in the service's namespace, and the Composition turns it into an S3 bucket named `<namespace>-<name>`, with versioning if asked for, plus a Secret `<name>-bucket` the service reads its connection from. `kubectl get buckets.back.lab -A` lists the requests; `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became.
 
+### Who can do what
+
+Two identities stand for the two sides: `dev`, a developer in `team-a`, the team that owns hello, and `platform-admin`, in the `platform` team. In a company both would come from an identity provider. Here `just identities` gives each one a kubectl context and an Argo CD password. The context carries a certificate the cluster's CA signs through the CertificateSigningRequest API, naming the user and its group: what RBAC checks, as it would check an identity provider's token.
+
+| | kubectl | Argo CD |
+|---|---|---|
+| `dev` (`team-a`) | reads its team's service namespaces: workloads, logs, events, requests and the resources Crossplane made for them; no Secrets, no changes | sees and syncs the services' Applications, and reads their logs |
+| `platform-admin` (`platform`) | everything | everything |
+
+The `developer` role, in `platform/rbac/`, combines Kubernetes' `view` role with Crossplane's read access to requests and managed resources. `charts/app` grants it to the service's team in every namespace it deploys to, so a new service's team can read it from the start. `crossplane resource trace` works for a developer too, down to the Secret it can't read. Argo CD's built-in `admin` account is off; the kind cluster's own admin (`kubectl --context kind-back`) is what `just` builds the cluster with.
+
+Try `kubectl --context dev -n hello-staging get pods,buckets.back.lab`, then `kubectl --context dev get compositions`.
+
 ### The golden path
 
 Every service is deployed by the same chart, `charts/app`, fed by the service's own values. Who decides what:
 
 | The team declares | The platform decides |
 |---|---|
-| name and owning team | object names, labels, namespace (`<name>-<stage>`) |
+| name and owning team | object names, labels, the namespace (`<name>-<stage>`) and the team's read access to it |
 | the port it listens on | liveness and readiness probes on `/healthz` |
 | a size: small, medium or large | replicas, CPU and memory for each size |
 | whether it's public | the address: `<name>.<stage>.localhost`, `<name>.localhost` in production |

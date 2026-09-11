@@ -43,3 +43,19 @@ spec:
     - group: ""
       kind: Namespace
       name: "*-production"
+---
+# Argo CD creates it wide open. Closed, it makes every Application name one of the projects above.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  sourceRepos: []
+  destinations: []
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: "*"
+      kind: "*"

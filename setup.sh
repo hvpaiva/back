@@ -75,14 +75,14 @@ if $is_ubuntu && [[ ${VERSION_ID:-} == 24.04 ]]; then
 elif $is_ubuntu; then
   warn "$system_name: the lab is tested on Ubuntu 24.04"
 else
-  warn "$system_name: the lab is tested on Ubuntu 24.04; install system packages (curl, git, Docker) yourself"
+  warn "$system_name: the lab is tested on Ubuntu 24.04; install system packages (curl, git, OpenSSL, Docker) yourself"
 fi
 
 # --- Base tools --------------------------------------------------------------
 
 section "Base tools"
 missing=()
-for tool in curl git; do
+for tool in curl git openssl; do
   if command -v "$tool" >/dev/null; then ok "$tool"; else missing+=("$tool"); fi
 done
 if ((${#missing[@]} > 0)); then

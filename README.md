@@ -13,15 +13,15 @@ Everything runs on your machine, in a kind cluster, with LocalStack standing in 
 
 It's a reference setup you can run, poke at and read. It makes the connections between the tools visible, along with the rough edges a platform team hits when putting them together.
 
-It isn't a course. It doesn't teach each tool from scratch; their own documentation does that better. It isn't production-ready either: one node, no TLS, admin credentials, and an AWS emulator that no longer gets updates.
+It isn't a course. It doesn't teach each tool from scratch; their own documentation does that better. It isn't production-ready either: one node, no TLS, local accounts instead of single sign-on, and an AWS emulator that no longer gets updates.
 
 ## What you'll see
 
-Two perspectives on the same cluster.
+Two perspectives on the same cluster, each with an identity to see it through: `dev`, a developer in `team-a`, and `platform-admin`.
 
 ### A developer shipping a service
 
-[hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, whether it's public, and a bucket. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. Pull requests are checked against the platform's rules before the merge. The developer never touches the cluster, never writes a Kubernetes manifest or a Dockerfile, and never creates the bucket: the platform does, and hands the service its details.
+[hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, whether it's public, and a bucket. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. Pull requests are checked against the platform's rules before the merge. The developer never touches the cluster, never writes a Kubernetes manifest or a Dockerfile, and never creates the bucket: the platform does, and hands the service its details. As `dev`, Argo CD shows only the services, and kubectl reads the team's namespaces without being able to change them.
 
 <p align="center">
   <img src="docs/images/hello-staging.png" alt="hello in staging: a yellow hang tag showing version sha-de4d439" width="45%">
@@ -30,7 +30,7 @@ Two perspectives on the same cluster.
 
 ### The platform behind it
 
-Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs: a service's request for a bucket becomes an S3 bucket in LocalStack, with the platform's defaults.
+Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs: a service's request for a bucket becomes an S3 bucket in LocalStack, with the platform's defaults. As `platform-admin`, you see all of it.
 
 ```mermaid
 flowchart LR
@@ -59,7 +59,8 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 
 | What | Where |
 |---|---|
-| Argo CD | http://argocd.localhost (user `admin`, password from `just argocd-password`) |
+| Argo CD | http://argocd.localhost (user `dev` or `platform-admin`, password from `just argocd-password <user>`) |
+| kubectl | From this directory: `kubectl --context dev` or `--context platform-admin` |
 | Headlamp | http://headlamp.localhost (token from `just headlamp-token`) |
 | hello | http://hello.staging.localhost and http://hello.localhost |
 | Traefik | http://traefik.localhost/dashboard/ |
@@ -104,7 +105,7 @@ Argo CD can report each deployment back to GitHub: the deployed commit gets an `
 In this repository:
 
 - `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account (LocalStack). `just` installs it.
-- `platform/` is everything Argo CD delivers. `platform/root.yaml`, the only thing applied by hand, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages and its connection to LocalStack; `platform/apis/` holds the APIs services request resources through.
+- `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages and its connection to LocalStack; `platform/apis/` holds the APIs services request resources through; `platform/rbac/` says what each team can see.
 - `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls: `go.yaml` checks Go services, `delivery.yaml` validates and ships any service.
 - `scripts/` holds what the longer `just` recipes run.
 - `docs/` explains [how it works](docs/how-it-works.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).

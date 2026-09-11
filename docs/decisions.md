@@ -33,6 +33,14 @@ Why the lab is built the way it is. Most of these trade realism for something th
 - Every package pinned in Git, dependencies included. The family provider is declared rather than left to Crossplane's dependency resolution, which would install whatever version it finds.
 - Compositions in Go templates (function-go-templating). They read like the Helm templates of the platform's chart.
 
+## Access
+
+- Identities from client certificates the cluster's CA signs, not from an identity provider. A certificate names a user and its groups, the same things an identity provider's token carries, so RBAC is written the way a company would write it, without running Dex or logging kubectl in through a browser. The cost: a certificate can't be revoked before it expires, so they last 30 days, and `just up` issues new ones.
+- Developers read; Git writes. `dev` can't change anything in the cluster: a change made there would skip the pull request, the validation and the promotion, and Argo CD would undo most of it anyway.
+- A team's access comes with its services. The chart binds the team's group to the `developer` role in each namespace it deploys to, so nobody grants access by hand.
+- Argo CD local accounts, with the built-in admin disabled, and passwords `just identities` generates and keeps in the cluster, not in Git. All services share one Argo CD project, so a developer sees other teams' services there, though not in kubectl. Separating teams in Argo CD takes a project per team.
+- The `default` project closed. Every Application names the project whose rules it follows.
+
 ## Tooling
 
 - just. Readable recipes, pinned by mise like the rest of the toolchain. Anything longer than a few lines lives in `scripts/`, so the justfile stays a list of what you can do.

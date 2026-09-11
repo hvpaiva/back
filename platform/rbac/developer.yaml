@@ -1,0 +1,12 @@
+# What a team may read in its services' namespaces, where charts/app binds it:
+# Kubernetes' view role, plus the platform's requests and their managed resources.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: developer
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        rbac.authorization.k8s.io/aggregate-to-view: "true"
+    - matchLabels:
+        rbac.crossplane.io/aggregate-to-view: "true"

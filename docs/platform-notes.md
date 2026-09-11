@@ -6,7 +6,11 @@ Things that aren't obvious until they bite, collected while building the lab. Ea
 
 Something has to install Argo CD before it can manage anything. Here Helm installs it once (`just argocd`), and an Application in `platform/apps/argocd.yaml` then adopts that installation. Adoption only works if the Application renders exactly what Helm installed: same chart version, same release name, same values file. Get one of them wrong and Argo CD creates a second copy of itself next to the first.
 
-The root Application has a bootstrap problem of its own: it creates the `platform` project, so it can't belong to it. It stays in the built-in `default` project, which allows everything, and that's why who may use `default` needs to be restricted once there are real users.
+The root Application has a bootstrap problem of its own: it belongs to the `platform` project, which it creates. `just argocd` applies the projects before root, and root keeps them in sync from then on.
+
+## Closing the default project takes every field
+
+Argo CD creates a `default` project that allows everything, and an Application that names no project lands there. The lab closes it in `platform/apps/projects.yaml`, and every list has to be there, even the empty ones: the first apply to an object nobody applied before only changes the fields the manifest has. Left out, `clusterResourceWhitelist` would stay `*`.
 
 ## A local cluster gets no webhooks
 

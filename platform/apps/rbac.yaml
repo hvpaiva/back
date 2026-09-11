@@ -1,18 +1,16 @@
-# Applied by `just argocd`, after the projects: it belongs to one of the projects it keeps in sync.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root
+  name: rbac
   namespace: argocd
 spec:
   project: platform
   source:
     repoURL: https://github.com/hvpaiva/back.git
     targetRevision: main
-    path: platform/apps
+    path: platform/rbac
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
   syncPolicy:
     automated:
       prune: true

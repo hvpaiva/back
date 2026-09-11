@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Smoke-tests the lab from the host (just check): every component answers, and hello runs
-# in both stages and reaches its bucket.
+# Smoke-tests the lab from the host (just check): every component answers, every identity
+# authenticates, and hello runs in both stages and reaches its bucket.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
@@ -27,7 +27,7 @@ localstack() {
 
 argocd_server() {
   curl -fsS http://argocd.localhost/api/version |
-    jq -er '"\(.Version | split("+")[0]), http://argocd.localhost (user admin, password: just argocd-password)"'
+    jq -er '"\(.Version | split("+")[0]), http://argocd.localhost (dev or platform-admin, password: just argocd-password <user>)"'
 }
 
 headlamp() {
@@ -53,6 +53,7 @@ report localstack localstack
 report argocd argocd_server
 report headlamp headlamp
 report crossplane crossplane_packages
+scripts/identities.sh check || problems=$((problems + 1))
 report hello hello staging http://hello.staging.localhost
 report hello hello production http://hello.localhost
 ((problems == 0))
