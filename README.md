@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/images/back-stack.png" alt="BACK lab logo" width="160">
+  <img src="docs/images/logo.png" alt="BACK lab logo" width="160">
   <h1>BACK lab</h1>
 </div>
 
