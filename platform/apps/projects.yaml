@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   # created before the Applications that use it
+spec:
+  description: Components run by the platform team
+  sourceRepos:                           # every repo its Applications read from
+    - https://github.com/hvpaiva/back.git
+    - https://argoproj.github.io/argo-helm
+    - https://kubernetes-sigs.github.io/headlamp/
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"                     # any namespace
+  clusterResourceWhitelist:
+    - group: "*"                         # any cluster-scoped kind: CRDs, ClusterRoles…
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   
+spec:
+  description: Components run by the product team
+  sourceRepos:
+    - https://github.com/hvpaiva/back-gitops.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*-dev"                     
+    - server: https://kubernetes.default.svc
+      namespace: "*-prod"                     
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+      name: "*-dev"
+    - group: ""
+      kind: Namespace
+      name: "*-prod"

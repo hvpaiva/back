@@ -51,6 +51,7 @@ The justfile exports the same `KUBECONFIG` and `ARGOCD_OPTS`, so its recipes onl
 - `platform/` holds what the platform team runs on top, declared in Git and delivered by Argo CD, starting with Argo CD itself:
   - `root.yaml` is the app of apps, the only Application applied by hand (`just argocd` does it). It delivers every Application in `apps/`.
   - `apps/argocd.yaml` makes Argo CD manage itself, with the chart values in `argocd/values.yaml`. `just argocd` installs Argo CD once with the same values; after that, upgrading or reconfiguring it is a commit.
+  - `apps/projects.yaml` draws the line between the platform and the teams. Applications in the `platform` project can use any namespace and create cluster-wide resources. Applications in the `apps` project can only read `back-gitops` and deliver to namespaces ending in `-dev` or `-prod`.
 
 ## Decisions
 

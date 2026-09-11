@@ -4,7 +4,7 @@ metadata:
   name: argocd
   namespace: argocd          
 spec:
-  project: default          
+  project: platform
   sources:
     # 1. The manifests: the argo-cd Helm chart
     - repoURL: https://argoproj.github.io/argo-helm
