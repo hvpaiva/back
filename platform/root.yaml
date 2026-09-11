@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd          # Argo CD only looks for Applications in its own namespace
+spec:
+  project: default           # the built-in AppProject
+  source:
+    repoURL: https://github.com/hvpaiva/back.git
+    targetRevision: main     # a branch, tag or commit
+    path: platform/apps      # every manifest in this folder gets applied
+  destination:
+    server: https://kubernetes.default.svc   # the cluster Argo CD runs in
+    namespace: argocd        # for resources that don't set a namespace
+  syncPolicy:
+    automated:
+      prune: true            # file deleted from Git → object deleted from the cluster
+      selfHeal: true         # manual change in the cluster → reverted to what's in Git

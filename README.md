@@ -47,7 +47,9 @@ The justfile exports the same `KUBECONFIG` and `ARGOCD_OPTS`, so its recipes onl
 ## Layout
 
 - `cluster/` holds the base layer: what an infrastructure team would hand us (a cluster, an ingress, a cloud account). It's installed by `just`, not by GitOps.
-- `platform/` holds what the platform team runs on top, declared in Git and delivered by Argo CD, starting with Argo CD itself. `just argocd` installs it once from `platform/argocd/values.yaml`; after that, a change to that file takes effect when it's pushed.
+- `platform/` holds what the platform team runs on top, declared in Git and delivered by Argo CD, starting with Argo CD itself:
+  - `root.yaml` is the app of apps, the only Application applied by hand (`just argocd` does it). It delivers every Application in `apps/`.
+  - `apps/argocd.yaml` makes Argo CD manage itself, with the chart values in `argocd/values.yaml`. `just argocd` installs Argo CD once with the same values; after that, upgrading or reconfiguring it is a commit.
 
 ## Decisions
 

@@ -40,16 +40,18 @@ localstack:
     kubectl apply -f cluster/localstack.yaml
     kubectl --namespace localstack rollout status deployment/localstack --timeout=5m
 
-# Install Argo CD once; after that, it manages itself from Git
+# Install Argo CD once and apply the root Application; from then on, Argo CD manages itself from Git
 argocd:
     #!/usr/bin/env bash
     set -euo pipefail
     if kubectl --namespace argocd get application argocd >/dev/null 2>&1; then
         echo "Argo CD already manages itself: change platform/argocd/values.yaml and push instead"
-        exit 0
+    else
+        helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version {{argocd_chart_version}} \
+            --namespace argocd --create-namespace --values platform/argocd/values.yaml --wait
     fi
-    helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version {{argocd_chart_version}} \
-        --namespace argocd --create-namespace --values platform/argocd/values.yaml --wait
+    # The app of apps: delivers every Application in platform/apps/, Argo CD's own included.
+    kubectl apply -f platform/root.yaml
 
 # Print the initial password of Argo CD's admin user
 argocd-password:
