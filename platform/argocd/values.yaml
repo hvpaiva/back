@@ -11,6 +11,7 @@ configs:
     # instead: every 60s plus up to 10s of jitter (chart default: 120s + 60s).
     timeout.reconciliation: 60s
     timeout.reconciliation.jitter: 10s
+    ui.bannercontent: "BACK lab"
   params:
     # Traefik serves the lab over plain HTTP, so the server doesn't use TLS.
     server.insecure: true
