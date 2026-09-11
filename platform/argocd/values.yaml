@@ -17,8 +17,8 @@ configs:
         hs.message = obj.status.health.message or ""
       end
       return hs
-    # Argo CD has no check for the platform's own kinds: a request that isn't ready would count as healthy.
-    resource.customizations.health.back.lab_*: |
+    # Argo CD has no check for the platform's own kinds, one key per kind: ConfigMap keys can't hold `*`.
+    resource.customizations.health.back.lab_Bucket: |
       local ready, synced
       for _, c in ipairs(obj.status and obj.status.conditions or {}) do
         if c.type == "Ready" then ready = c end
