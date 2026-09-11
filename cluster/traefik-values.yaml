@@ -3,7 +3,8 @@
 
 # kind has no load balancer; these node ports are mapped to the host in kind.yaml.
 service:
-  type: NodePort
+  spec:
+    type: NodePort
 
 ports:
   web:
@@ -15,6 +16,14 @@ providers:
   # Ingress objects. The chart also creates the default IngressClass "traefik".
   kubernetesIngress:
     enabled: true
+    # Write this address into every Ingress's status, as a cloud load balancer
+    # would. Argo CD reports an Ingress as Healthy only once it has an address.
+    # publishedService would copy the address of Traefik's own Service instead,
+    # and a NodePort Service has none.
+    publishedService:
+      enabled: false
+    ingressEndpoint:
+      ip: 127.0.0.1
   # Gateway API (HTTPRoute and friends). The chart creates a GatewayClass and a Gateway.
   kubernetesGateway:
     enabled: true
