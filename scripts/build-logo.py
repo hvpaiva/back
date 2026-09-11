@@ -36,6 +36,10 @@ HEPT_ROUND = 6
 HOLE_STROKE = HEPT_ROUND + 2 * CUT_WIDTH  # same gap as the cuts, all around
 WHEEL_RADIUS = 0.8 * (HEPT_RADIUS * math.cos(math.pi / 7) + HEPT_ROUND / 2)
 
+# Room around the mark, so it never touches the edge of a favicon, an app icon
+# or a README image. The hexagon reaches the canvas at top and bottom.
+MARGIN = 10
+
 # Icon size and offset from the centre, the same in all four pieces so the set
 # reads as one. 28.9 is the largest size that keeps every icon at least 3 units
 # clear of the border, the cuts and the centre, measured against each icon's
@@ -164,6 +168,7 @@ def logo():
 out = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "logo.svg")
 out.write_text(
     '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
-    f'viewBox="0 0 128 128" width="128" height="128">{logo()}</svg>\n'
+    f'viewBox="{-MARGIN} {-MARGIN} {128 + 2 * MARGIN} {128 + 2 * MARGIN}" '
+    f'width="{128 + 2 * MARGIN}" height="{128 + 2 * MARGIN}">{logo()}</svg>\n'
 )
 print(f"wrote {out}")
