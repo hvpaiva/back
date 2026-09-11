@@ -44,6 +44,20 @@ configs:
         return {status = "Healthy"}
       end
       return {status = "Progressing", message = message}
+    # Kinds the activation policy leaves off have no CRD; the built-in check calls them Progressing.
+    resource.customizations.health.apiextensions.crossplane.io_ManagedResourceDefinition: |
+      if obj.spec ~= nil and obj.spec.state == "Inactive" then
+        return {status = "Suspended", message = "Inactive: no activation policy selects this kind"}
+      end
+      for _, c in ipairs(obj.status and obj.status.conditions or {}) do
+        if c.type == "Established" then
+          if c.status == "True" then
+            return {status = "Healthy"}
+          end
+          return {status = "Progressing", message = c.message or c.reason}
+        end
+      end
+      return {status = "Progressing", message = "Waiting for its CRD"}
     # Crossplane's bookkeeping, one per managed resource.
     resourceExclusionsAdditional:
       - apiGroups: ["*"]
