@@ -70,6 +70,10 @@ The AWS provider sends a service's calls to a custom endpoint only if that servi
 
 To read a bucket's tags, the provider calls S3 Control at `<account-id>.<endpoint>`, and it always has an account ID (`000000000000` with LocalStack). AWS has DNS for those names; the cluster didn't, so the bucket never became ready. `cluster/coredns.yaml` adds a CoreDNS rule that answers `<account-id>.localstack.localstack.svc` with LocalStack's Service.
 
+## Argo CD can't judge the platform's own kinds
+
+Argo CD ships health checks for Crossplane's kinds and for the providers' managed resources, but not for the APIs a platform defines. With LocalStack turned off, hello's bucket went unreachable, the provider marked the managed bucket not ready (*Degraded* in Argo CD's tree), Crossplane marked the request not ready, and the `hello-staging` Application stayed *Healthy*: an Application's health only counts its own resources, and to Argo CD the request had no health at all. `platform/argocd/values.yaml` adds a check for every `back.lab` kind: *Healthy* when the request is ready, *Degraded* when Crossplane can't process it, *Progressing* otherwise. It also hides the ProviderConfigUsages, one per managed resource, which crowded the tree without saying anything.
+
 ## Deleting a namespace strands its managed resources
 
 Delete a namespace that still holds a managed resource and the resource stays behind, stuck on its finalizer, and so does the namespace. To reach the cloud, the provider first records that the resource uses its ProviderConfig, in an object it creates in the same namespace; a terminating namespace refuses new objects, so the provider never gets as far as deleting anything. Restarting it doesn't help. It's an open Crossplane bug ([crossplane-runtime#1150](https://github.com/crossplane/crossplane-runtime/issues/1150)). Delete the requests first, then the namespace. If one is already stuck, delete the external resource by hand if it still exists, then remove the finalizer.

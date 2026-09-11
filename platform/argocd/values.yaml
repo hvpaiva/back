@@ -17,6 +17,20 @@ configs:
         hs.message = obj.status.health.message or ""
       end
       return hs
+    # Argo CD has no check for the platform's own kinds: a request that isn't ready would count as healthy.
+    resource.customizations.health.back.lab_*: |
+      local ready, synced
+      for _, c in ipairs(obj.status and obj.status.conditions or {}) do
+        if c.type == "Ready" then ready = c end
+        if c.type == "Synced" then synced = c end
+      end
+      if synced ~= nil and synced.status == "False" then
+        return {status = "Degraded", message = synced.message or synced.reason}
+      end
+      if ready ~= nil and ready.status == "True" then
+        return {status = "Healthy"}
+      end
+      return {status = "Progressing", message = ready and (ready.message or ready.reason) or "Waiting for Crossplane"}
     # The built-in check says Degraded while a provider starts, failing its sync.
     resource.customizations.health.pkg.crossplane.io_Provider: |
       local installed, healthy = false, false
@@ -30,6 +44,10 @@ configs:
         return {status = "Healthy"}
       end
       return {status = "Progressing", message = message}
+    # Crossplane's bookkeeping, one per managed resource.
+    resourceExclusionsAdditional:
+      - apiGroups: ["*"]
+        kinds: [ProviderConfigUsage]
   params:
     # Traefik serves plain HTTP.
     server.insecure: true
