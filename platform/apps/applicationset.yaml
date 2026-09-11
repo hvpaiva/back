@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - stage: staging
+                  branch: staging
+                - stage: production
+                  branch: main
+          - git:
+              repoURL: https://github.com/hvpaiva/back-hello.git
+              revision: '{{ .branch }}'
+              files:
+                - path: charts/*/values.yaml
+  template:
+    metadata:
+      name: '{{ .application.name }}-{{ .stage }}'
+      labels:
+        team: '{{ .application.team }}'
+        stage: '{{ .stage }}'
+    spec:
+      project: apps
+      sources:
+        - repoURL: https://github.com/hvpaiva/back.git
+          targetRevision: main
+          path: charts/app
+          helm:
+            releaseName: '{{ .application.name }}'
+            ignoreMissingValueFiles: true
+            valueFiles:
+              - '$values/{{ .path.path }}/values.yaml'
+              - '$values/{{ .path.path }}/values-{{ .stage }}.yaml'
+            parameters:
+              - name: platform.stage
+                value: '{{ .stage }}'
+        - repoURL: https://github.com/hvpaiva/back-hello.git
+          targetRevision: '{{ .branch }}'
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .application.name }}-{{ .stage }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
