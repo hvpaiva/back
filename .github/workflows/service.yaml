@@ -70,7 +70,7 @@ jobs:
 
   # Decides what a push to a stage branch needs.
   #   staging: a new image, unless the push only touched charts/ (the deploy
-  #            configuration), which Argo CD applies as it is.
+  #            configuration, which Argo CD applies as it is) or documentation.
   #   main:    a promotion, only if the push changed the image staging runs,
   #            as merging staging does. Reverting a promotion doesn't.
   plan:
@@ -96,7 +96,7 @@ jobs:
           known=false
           if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then known=true; fi
           if [[ $BRANCH == staging ]]; then
-            if ! $known || git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qv '^charts/'; then
+            if ! $known || git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qvE '^(charts|docs)/|\.md$'; then
               build=true
             fi
           elif [[ $BRANCH == main ]]; then

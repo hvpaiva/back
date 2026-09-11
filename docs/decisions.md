@@ -18,6 +18,7 @@ Why the lab is built the way it is. Most of these trade realism for something th
 - The running version is in Git. CI commits the image it built instead of telling Argo CD about it through its API. Git then always says what runs where, rollback is a revert, a rebuilt cluster comes back with the same versions, and CI needs no access to the cluster. The cost is a commit from CI on every deploy.
 - Production runs the image staging ran. Promotion copies the image; it doesn't rebuild from `main`.
 - Deploy feedback comes from Argo CD, not from CI. CI is done once it commits the image; Argo CD tells GitHub when that version is running and healthy, through a GitHub App, so CI still needs no access to the cluster.
+- One delivery workflow for every service, maintained by the platform. Services call it at `main`, the same trade-off as the chart: a fix reaches every service at once, and so does a mistake. A service that needs stability can pin a commit instead.
 - A Helm chart as the golden path. Helm is how many teams already package their services. Here the platform maintains one chart, and each service only declares what it needs, much like a CircleCI orb.
 - Services in public GitHub repositories on a personal account. Argo CD reads them without credentials, and no company system is involved.
 

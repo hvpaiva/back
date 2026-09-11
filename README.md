@@ -1,4 +1,7 @@
-# BACK lab
+<div align="center">
+  <img src="docs/images/back-stack.png" alt="BACK lab logo" width="160">
+  <h1>BACK lab</h1>
+</div>
 
 A local lab that shows how Backstage, Argo CD, Crossplane and Kyverno fit together as an internal developer platform: what a developer does to ship a service, what the platform team builds so that it takes so little, and what happens in between.
 
@@ -18,11 +21,16 @@ Two perspectives on the same cluster.
 
 ### A developer shipping a service
 
-[hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, and whether it's public. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. The developer never touches the cluster and never writes a Kubernetes manifest.
+[hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, and whether it's public. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. Pull requests are checked against the platform's rules before the merge. The developer never touches the cluster and never writes a Kubernetes manifest.
+
+<p align="center">
+  <img src="docs/images/hello-staging.png" alt="hello in staging: a yellow hang tag showing version sha-de4d439" width="45%">
+  <img src="docs/images/hello-production.png" alt="hello in production: a green hang tag showing the same version" width="45%">
+</p>
 
 ### The platform behind it
 
-Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Argo CD projects decide what each team may deploy, and where.
+Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. One workflow, called from each service's CI, validates, builds and ships every service the same way. Argo CD projects decide what each team may deploy, and where.
 
 ```mermaid
 flowchart LR
@@ -94,7 +102,7 @@ In this repository:
 
 - `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account. `just` installs it.
 - `platform/` is everything Argo CD delivers, starting with Argo CD itself. `platform/root.yaml` is the only thing applied by hand.
-- `charts/app/` is the golden path for services.
+- `charts/app/` is the golden path for services, and `.github/workflows/service.yaml` the workflow every service's CI calls to validate and ship.
 - `docs/` explains [how it works](docs/how-it-works.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
 
 ## Isolation
