@@ -1,0 +1,67 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: tables.back.lab
+spec:
+  group: back.lab
+  names:
+    kind: Table
+    plural: tables
+  scope: Namespaced
+  defaultCompositionRef:
+    name: table-dynamodb
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      additionalPrinterColumns:
+        - name: TABLE
+          type: string
+          jsonPath: .status.tableName
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [partitionKey]
+              x-kubernetes-validations:
+                - rule: self.partitionKey == oldSelf.partitionKey && has(self.sortKey) == has(oldSelf.sortKey) && (!has(self.sortKey) || self.sortKey == oldSelf.sortKey)
+                  message: A table's keys can't change once it exists.
+              properties:
+                partitionKey:
+                  type: object
+                  required: [name]
+                  description: The attribute that decides where each item is stored.
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 255
+                    type:
+                      type: string
+                      enum: [string, number, binary]
+                      default: string
+                sortKey:
+                  type: object
+                  required: [name]
+                  description: An attribute that orders the items sharing a partition key.
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 255
+                    type:
+                      type: string
+                      enum: [string, number, binary]
+                      default: string
+                timeToLiveAttribute:
+                  type: string
+                  minLength: 1
+                  description: An attribute holding each item's expiry time, in seconds since the epoch. Expired items are deleted.
+            status:
+              type: object
+              properties:
+                tableName:
+                  type: string
+                  description: The table's name in DynamoDB.

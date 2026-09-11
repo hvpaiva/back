@@ -7,7 +7,7 @@ A local lab that shows how Backstage, Argo CD, Crossplane and Kyverno fit togeth
 
 Everything runs on your machine, in a kind cluster, with LocalStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
 
-> Work in progress: Argo CD, the delivery path for services and the first platform API (buckets, through Crossplane) are in place; more APIs, Kyverno and Backstage are being added.
+> Work in progress: Argo CD, the delivery path for services and the first platform APIs (buckets, queues, tables and caches, through Crossplane) are in place; databases, Kyverno and Backstage are being added.
 
 ## What this is, and what it isn't
 
@@ -24,7 +24,7 @@ Two perspectives on the same cluster, each with an identity to see it through: `
 [hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, whether it's public, and a bucket. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. Pull requests are checked against the platform's rules before the merge. The developer never touches the cluster, never writes a Kubernetes manifest or a Dockerfile, and never creates the bucket: the platform does, and hands the service its details. As `dev`, Argo CD shows only the services, and kubectl reads the team's namespaces without being able to change them.
 
 <p align="center">
-  <img src="docs/images/hello-staging.png" alt="hello in staging: an orange hang tag showing version sha-bfd05d7" width="45%">
+  <img src="docs/images/hello-staging.png" alt="hello in staging: an orange hang tag showing version sha-c94b363" width="45%">
   <img src="docs/images/hello-production.png" alt="hello in production: a green hang tag showing the same version" width="45%">
 </p>
 

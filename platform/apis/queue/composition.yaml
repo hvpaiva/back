@@ -1,0 +1,86 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: queue-sqs
+spec:
+  compositeTypeRef:
+    apiVersion: back.lab/v1alpha1
+    kind: Queue
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $observed := .observed.resources | default dict }}
+            {{- $suffix := ternary ".fifo" "" $xr.spec.fifo }}
+            {{- $queue := printf "%s-%s%s" $xr.metadata.namespace $xr.metadata.name $suffix }}
+            {{- $deadLetter := printf "%s-%s-dlq%s" $xr.metadata.namespace $xr.metadata.name $suffix }}
+            {{- $region := "us-east-1" }}
+            {{- $deadLetterArn := dig "dead-letter" "resource" "status" "atProvider" "arn" "" $observed }}
+            ---
+            # Where a message goes after five failed deliveries, kept for 14 days.
+            apiVersion: sqs.aws.m.upbound.io/v1beta1
+            kind: Queue
+            metadata:
+              annotations:
+                {{ setResourceNameAnnotation "dead-letter" }}
+            spec:
+              forProvider:
+                # A queue is named here, not with an external name: SQS identifies it by URL.
+                name: {{ $deadLetter }}
+                region: {{ $region }}
+                {{- if $xr.spec.fifo }}
+                fifoQueue: true
+                {{- end }}
+                messageRetentionSeconds: 1209600
+            ---
+            apiVersion: sqs.aws.m.upbound.io/v1beta1
+            kind: Queue
+            metadata:
+              annotations:
+                {{ setResourceNameAnnotation "queue" }}
+            spec:
+              forProvider:
+                name: {{ $queue }}
+                region: {{ $region }}
+                {{- if $xr.spec.fifo }}
+                fifoQueue: true
+                contentBasedDeduplication: true
+                {{- end }}
+                visibilityTimeoutSeconds: {{ $xr.spec.visibilityTimeoutSeconds }}
+                {{- with $deadLetterArn }}
+                redrivePolicy: '{{ dict "deadLetterTargetArn" . "maxReceiveCount" 5 | toJson }}'
+                {{- end }}
+            {{- $url := dig "queue" "resource" "status" "atProvider" "url" "" $observed }}
+            {{- $deadLetterUrl := dig "dead-letter" "resource" "status" "atProvider" "url" "" $observed }}
+            {{- if and $url $deadLetterUrl }}
+            ---
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: {{ $xr.metadata.name }}-queue
+              annotations:
+                {{ setResourceNameAnnotation "connection" }}
+            stringData:
+              QUEUE_URL: {{ $url }}
+              DEAD_LETTER_QUEUE_URL: {{ $deadLetterUrl }}
+              AWS_REGION: {{ $region }}
+              AWS_ENDPOINT_URL: http://localstack.localstack.svc:4566
+              AWS_ACCESS_KEY_ID: test
+              AWS_SECRET_ACCESS_KEY: test
+            {{- end }}
+            ---
+            apiVersion: back.lab/v1alpha1
+            kind: Queue
+            status:
+              queueName: {{ $queue }}
+    - step: ready
+      functionRef:
+        name: function-auto-ready

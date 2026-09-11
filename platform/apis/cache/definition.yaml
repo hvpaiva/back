@@ -1,0 +1,38 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: caches.back.lab
+spec:
+  group: back.lab
+  names:
+    kind: Cache
+    plural: caches
+  scope: Namespaced
+  defaultCompositionRef:
+    name: cache-valkey
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      additionalPrinterColumns:
+        - name: ADDRESS
+          type: string
+          jsonPath: .status.address
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                size:
+                  type: string
+                  enum: [small, medium, large]
+                  default: small
+                  description: How much the cache holds before it drops the keys used least recently.
+            status:
+              type: object
+              properties:
+                address:
+                  type: string
+                  description: Where the cache answers, host and port.

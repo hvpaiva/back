@@ -19,6 +19,30 @@ spec:
   runtimeConfigRef:
     name: aws
 ---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-sqs
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/provider-aws-sqs:v2.7.0
+  skipDependencyResolution: true
+  runtimeConfigRef:
+    name: aws
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-dynamodb
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/provider-aws-dynamodb:v2.7.0
+  skipDependencyResolution: true
+  runtimeConfigRef:
+    name: aws
+---
 # Drift checks every minute instead of every ten, so out-of-band changes are undone quickly.
 apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig
@@ -46,3 +70,5 @@ spec:
   activate:
     - buckets.s3.aws.m.upbound.io
     - bucketversionings.s3.aws.m.upbound.io
+    - queues.sqs.aws.m.upbound.io
+    - tables.dynamodb.aws.m.upbound.io

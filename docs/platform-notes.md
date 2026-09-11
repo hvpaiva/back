@@ -78,6 +78,18 @@ The AWS provider sends a service's calls to a custom endpoint only if that servi
 
 To read a bucket's tags, the provider calls S3 Control at `<account-id>.<endpoint>`, and it always has an account ID (`000000000000` with LocalStack). AWS has DNS for those names; the cluster didn't, so the bucket never became ready. `cluster/coredns.yaml` adds a CoreDNS rule that answers `<account-id>.localstack.localstack.svc` with LocalStack's Service.
 
+## An external name isn't always a name
+
+Crossplane's `crossplane.io/external-name` annotation says what a managed resource is called in the cloud, and for an S3 bucket that's the bucket's name. SQS identifies a queue by its URL instead, so the provider overwrote the annotation with the URL it got back, and the queues, which set no `name`, came up called `terraform-1ac4f3bd49da...`: the random name the Terraform provider these are generated from picks. The Queue Composition names them in a field, `forProvider.name`. Which of the two a resource uses is in the provider's external-name configuration, not in its schema.
+
+## Unquoted, N is false
+
+A DynamoDB key is typed with a single letter: S, N or B. Written into a Composition's template without quotes, `type: N` reached the provider as the boolean `false`, because the YAML parser reads a bare N that way. `crossplane resource validate`, run against the provider's schema, caught it as "must be of type string". Anything a template writes that could be read as a boolean or a number needs quoting.
+
+## A Composition has no memory
+
+A Composition runs from scratch on every reconcile, so a password generated in its template would be a different password every time, and the service would be left holding the old one. The `Cache` Composition reads the password back from the Secret it composed and generates one only when there's nothing to read. Anything the platform can't recompute has to come from somewhere that keeps it: what was already composed, or whatever generated it in the first place.
+
 ## Argo CD can't judge the platform's own kinds
 
 Argo CD ships health checks for Crossplane's kinds and for the providers' managed resources, but not for the APIs a platform defines. With LocalStack turned off, hello's bucket went unreachable, the provider marked the managed bucket not ready (*Degraded* in Argo CD's tree), Crossplane marked the request not ready, and the `hello-staging` Application stayed *Healthy*: an Application's health only counts its own resources, and to Argo CD the request had no health at all. `platform/argocd/values.yaml` adds a check for the platform's kinds: *Healthy* when the request is ready, *Degraded* when Crossplane can't process it, *Progressing* otherwise. It takes one key per kind: Argo CD's documented wildcards (`back.lab_*`) aren't valid ConfigMap keys, and the first attempt left Argo CD failing to update itself. It also hides the ProviderConfigUsages, one per managed resource, which crowded the tree without saying anything.

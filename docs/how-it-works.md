@@ -72,9 +72,18 @@ Services call them at `main`, so a fix reaches all of them at once.
 
 ### Crossplane and the platform's APIs
 
-`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS provider for S3, and its connection to LocalStack. Of the 50 resource types the S3 provider ships, Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`.
+`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS providers for S3, SQS and DynamoDB, and their connection to LocalStack. The S3 provider alone ships 50 resource types; Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`.
 
-`platform/apis/` holds the APIs services request resources through. The first is `Bucket` (`back.lab/v1alpha1`): a service asks for one with `bucket:` in its values, the chart renders the request in the service's namespace, and the Composition turns it into an S3 bucket named `<namespace>-<name>`, with versioning if asked for, plus a Secret `<name>-bucket` the service reads its connection from. `kubectl get buckets.back.lab -A` lists the requests; `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became.
+`platform/apis/` holds the APIs services request resources through, all in `back.lab/v1alpha1` and all namespaced:
+
+| Request | What the platform makes of it |
+|---|---|
+| `Bucket` | an S3 bucket named `<namespace>-<name>`, with versioning if asked for |
+| `Queue` | an SQS queue, plus a dead-letter queue where messages land after five failed deliveries |
+| `Table` | a DynamoDB table with the keys asked for, billed per request |
+| `Cache` | a Valkey server in the namespace, Redis-compatible, with a memory cap and a password of its own |
+
+Each one also composes the Secret the service reads its connection from: `<name>-bucket`, `<name>-queue`, `<name>-table`, `<name>-cache`. Only `Bucket` is wired into the chart so far, with `bucket:` in a service's values; the others are requested by applying a `Queue`, a `Table` or a `Cache` to a namespace. `kubectl get buckets.back.lab -A` lists the requests; `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became.
 
 ### Who can do what
 

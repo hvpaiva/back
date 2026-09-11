@@ -36,6 +36,9 @@ configs:
       end
       return {status = "Progressing", message = ready and (ready.message or ready.reason) or "Waiting for Crossplane"}
     resource.customizations.health.back.lab_Database: *request-health
+    resource.customizations.health.back.lab_Cache: *request-health
+    resource.customizations.health.back.lab_Queue: *request-health
+    resource.customizations.health.back.lab_Table: *request-health
     # The built-in check says Degraded while a provider starts, failing its sync.
     resource.customizations.health.pkg.crossplane.io_Provider: |
       local installed, healthy = false, false

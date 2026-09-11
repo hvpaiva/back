@@ -1,0 +1,75 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: table-dynamodb
+spec:
+  compositeTypeRef:
+    apiVersion: back.lab/v1alpha1
+    kind: Table
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $table := printf "%s-%s" $xr.metadata.namespace $xr.metadata.name }}
+            {{- $region := "us-east-1" }}
+            {{- $types := dict "string" "S" "number" "N" "binary" "B" }}
+            {{- $keys := list $xr.spec.partitionKey }}
+            {{- with $xr.spec.sortKey }}{{ $keys = append $keys . }}{{- end }}
+            ---
+            apiVersion: dynamodb.aws.m.upbound.io/v1beta1
+            kind: Table
+            metadata:
+              annotations:
+                {{ setResourceNameAnnotation "table" }}
+                crossplane.io/external-name: {{ $table }}
+            spec:
+              forProvider:
+                region: {{ $region }}
+                # Billed per request, so nobody has to size read and write capacity.
+                billingMode: PAY_PER_REQUEST
+                hashKey: {{ $xr.spec.partitionKey.name | quote }}
+                {{- with $xr.spec.sortKey }}
+                rangeKey: {{ .name | quote }}
+                {{- end }}
+                attribute:
+                  {{- range $keys }}
+                  - name: {{ .name | quote }}
+                    # Quoted: unquoted, N would be read as false.
+                    type: {{ get $types .type | quote }}
+                  {{- end }}
+                {{- with $xr.spec.timeToLiveAttribute }}
+                ttl:
+                  attributeName: {{ . | quote }}
+                  enabled: true
+                {{- end }}
+                pointInTimeRecovery:
+                  enabled: true
+            ---
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: {{ $xr.metadata.name }}-table
+              annotations:
+                {{ setResourceNameAnnotation "connection" }}
+            stringData:
+              TABLE_NAME: {{ $table }}
+              AWS_REGION: {{ $region }}
+              AWS_ENDPOINT_URL: http://localstack.localstack.svc:4566
+              AWS_ACCESS_KEY_ID: test
+              AWS_SECRET_ACCESS_KEY: test
+            ---
+            apiVersion: back.lab/v1alpha1
+            kind: Table
+            status:
+              tableName: {{ $table }}
+    - step: ready
+      functionRef:
+        name: function-auto-ready

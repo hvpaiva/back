@@ -24,7 +24,7 @@ spec:
       key: credentials
   endpoint:
     # Only these services go to LocalStack; any other would go to AWS itself.
-    services: [s3, s3control]
+    services: [s3, s3control, sqs, dynamodb]
     hostnameImmutable: true
     url:
       type: Static

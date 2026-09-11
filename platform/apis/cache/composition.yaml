@@ -1,0 +1,138 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: cache-valkey
+spec:
+  compositeTypeRef:
+    apiVersion: back.lab/v1alpha1
+    kind: Cache
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $observed := .observed.resources | default dict }}
+            {{- $name := printf "%s-cache" $xr.metadata.name }}
+            {{- $address := printf "%s.%s.svc" $name $xr.metadata.namespace }}
+            {{- $sizes := dict
+                  "small"  (dict "maxmemory" "64mb"  "memory" "128Mi")
+                  "medium" (dict "maxmemory" "256mb" "memory" "384Mi")
+                  "large"  (dict "maxmemory" "1gb"   "memory" "1280Mi") }}
+            {{- $size := get $sizes $xr.spec.size }}
+            {{- $password := dig "connection" "resource" "data" "REDIS_PASSWORD" "" $observed }}
+            {{- if $password }}
+            {{- $password = b64dec $password }}
+            {{- else }}
+            {{- $password = randAlphaNum 32 }}
+            {{- end }}
+            ---
+            # No operator generates this one, so the Composition does, and reads it back
+            # from the Secret on every later run.
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: {{ $xr.metadata.name }}-cache
+              annotations:
+                {{ setResourceNameAnnotation "connection" }}
+            stringData:
+              REDIS_HOST: {{ $address }}
+              REDIS_PORT: "6379"
+              REDIS_PASSWORD: {{ $password | quote }}
+              REDIS_URL: redis://:{{ $password }}@{{ $address }}:6379
+            ---
+            apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: {{ $name }}
+              annotations:
+                {{ setResourceNameAnnotation "server" }}
+            spec:
+              replicas: 1
+              selector:
+                matchLabels:
+                  app.kubernetes.io/name: {{ $name }}
+              template:
+                metadata:
+                  labels:
+                    app.kubernetes.io/name: {{ $name }}
+                  annotations:
+                    # Restarts the server when the password changes.
+                    back.lab/credentials: {{ $password | sha256sum | trunc 12 }}
+                spec:
+                  securityContext:
+                    runAsNonRoot: true
+                    runAsUser: 999
+                    seccompProfile:
+                      type: RuntimeDefault
+                  containers:
+                    - name: valkey
+                      image: valkey/valkey:9-alpine
+                      args:
+                        # Memory is capped and nothing is written to disk: a cache, not a database.
+                        - --requirepass
+                        - $(VALKEY_PASSWORD)
+                        - --maxmemory
+                        - {{ $size.maxmemory }}
+                        - --maxmemory-policy
+                        - allkeys-lru
+                        - --save
+                        - ""
+                      env:
+                        - name: VALKEY_PASSWORD
+                          valueFrom:
+                            secretKeyRef:
+                              name: {{ $xr.metadata.name }}-cache
+                              key: REDIS_PASSWORD
+                      ports:
+                        - name: valkey
+                          containerPort: 6379
+                      readinessProbe:
+                        tcpSocket:
+                          port: valkey
+                        periodSeconds: 5
+                      resources:
+                        requests:
+                          cpu: 50m
+                          memory: {{ $size.memory }}
+                        limits:
+                          memory: {{ $size.memory }}
+                      securityContext:
+                        allowPrivilegeEscalation: false
+                        readOnlyRootFilesystem: true
+                        capabilities:
+                          drop: ["ALL"]
+                      volumeMounts:
+                        - name: data
+                          mountPath: /data
+                  volumes:
+                    - name: data
+                      emptyDir: {}
+            ---
+            apiVersion: v1
+            kind: Service
+            metadata:
+              name: {{ $name }}
+              annotations:
+                {{ setResourceNameAnnotation "service" }}
+            spec:
+              selector:
+                app.kubernetes.io/name: {{ $name }}
+              ports:
+                - name: valkey
+                  port: 6379
+                  targetPort: valkey
+            ---
+            apiVersion: back.lab/v1alpha1
+            kind: Cache
+            status:
+              address: {{ $address }}:6379
+    - step: ready
+      functionRef:
+        name: function-auto-ready
