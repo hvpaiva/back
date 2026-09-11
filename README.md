@@ -24,7 +24,7 @@ Two perspectives on the same cluster, each with an identity to see it through: `
 [hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, whether it's public, and a bucket. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. Pull requests are checked against the platform's rules before the merge. The developer never touches the cluster, never writes a Kubernetes manifest or a Dockerfile, and never creates the bucket: the platform does, and hands the service its details. As `dev`, Argo CD shows only the services, and kubectl reads the team's namespaces without being able to change them.
 
 <p align="center">
-  <img src="docs/images/hello-staging.png" alt="hello in staging: a yellow hang tag showing version sha-de4d439" width="45%">
+  <img src="docs/images/hello-staging.png" alt="hello in staging: an orange hang tag showing version sha-bfd05d7" width="45%">
   <img src="docs/images/hello-production.png" alt="hello in production: a green hang tag showing the same version" width="45%">
 </p>
 
