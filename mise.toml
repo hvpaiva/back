@@ -1,0 +1,27 @@
+# Pinned toolchain for the lab. Run `mise install` once inside this directory.
+
+# The mise version this lab was tested with; older versions stop with a clear error.
+min_version = "2026.3.7"
+
+[tools]
+just = "1.58.0"
+kind = "0.33.0"
+# Matches the cluster's Kubernetes minor (see cluster/kind.yaml).
+kubectl = "1.35.8"
+helm = "4.3.0"
+# Talks to LocalStack; see the AWS_* variables below.
+aws-cli = "2.36.43"
+# Used by `just check`.
+jq = "1.8.2"
+
+[env]
+# Isolation: inside this directory, kubectl and helm only see the lab cluster.
+# Its kubeconfig lives in .kube/ (git-ignored), never in ~/.kube/config.
+KUBECONFIG = "{{config_root}}/.kube/config"
+
+# Every AWS call made from this directory goes to LocalStack, never to a real
+# account, even if you have AWS credentials or profiles configured elsewhere.
+AWS_ENDPOINT_URL = "http://localhost:4566"
+AWS_ACCESS_KEY_ID = "test"
+AWS_SECRET_ACCESS_KEY = "test"
+AWS_REGION = "us-east-1"

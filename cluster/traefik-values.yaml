@@ -1,0 +1,35 @@
+# Traefik is the lab's entry point. It serves both classic Ingress and Gateway API,
+# so a composition can move from one to the other without changing the cluster.
+
+# kind has no load balancer; these node ports are mapped to the host in kind.yaml.
+service:
+  type: NodePort
+
+ports:
+  web:
+    nodePort: 30080
+  websecure:
+    nodePort: 30443
+
+providers:
+  # Ingress objects. The chart also creates the default IngressClass "traefik".
+  kubernetesIngress:
+    enabled: true
+  # Gateway API (HTTPRoute and friends). The chart creates a GatewayClass and a Gateway.
+  kubernetesGateway:
+    enabled: true
+
+gateway:
+  listeners:
+    web:
+      # Accept HTTPRoutes from every namespace, not only from traefik's own.
+      namespacePolicy:
+        from: All
+
+# Dashboard at http://traefik.localhost/dashboard/.
+# Fine for a local lab; never expose it like this on a real network.
+ingressRoute:
+  dashboard:
+    enabled: true
+    matchRule: Host(`traefik.localhost`)
+    entryPoints: ["web"]
