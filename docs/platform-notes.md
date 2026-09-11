@@ -50,6 +50,10 @@ The delivery workflow pushes commits and images, but it can't grant itself permi
 
 Validation fails the pull request's check, but GitHub still lets someone merge it. Making the check required is a branch protection rule, and on the stage branches it has a catch: CI pushes deploy commits there itself, so the rule needs an exemption for it.
 
+## A green check before the code is live
+
+With code and configuration in the same branch, one change reaches staging as two commits: the developer's, then the one CI makes after building the image. Argo CD applies both, so both get a green `argocd/hello-staging` check and a staging deployment on GitHub. The first one only means the configuration at that commit is applied, and it still points to the previous image. The code is live when CI's commit, the one naming the new image, gets its check. Running a separate branch that only CI writes to would avoid this, at the cost of one more moving part.
+
 ## Commits from CI don't trigger CI
 
 The service's CI commits the new image to its own repository. Commits pushed with the workflow's built-in token don't start new workflow runs, which is what keeps that from looping.
