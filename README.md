@@ -55,7 +55,7 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 | Traefik | http://traefik.localhost/dashboard/ |
 | LocalStack | http://localhost:4566 |
 
-`just` lists every recipe, and `just down` deletes the cluster.
+`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 2 GB of RAM and 5 GB of disk.
 
 Run this way, the lab follows the repositories above on GitHub. Everything works and you can inspect all of it, but you can't change what it deploys: Argo CD reads GitHub, not your disk.
 
