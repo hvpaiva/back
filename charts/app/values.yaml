@@ -1,0 +1,24 @@
+# What a team declares for its service, in back-gitops/apps/<app>/<env>/values.yaml.
+# The chart turns it into a Deployment, a Service, a ServiceAccount and, when
+# public, an Ingress. values.schema.json rejects anything else.
+
+# The image to run, with its tag. CI updates it on every build.
+image: ""
+
+# The port the service listens on. It must answer GET /healthz there.
+port: 8080
+
+# How much capacity the service gets: small, medium or large.
+# The platform decides what each size means (see _helpers.tpl).
+size: small
+
+# Whether to expose the service at http://<app>.<env>.localhost
+# (in prod: http://<app>.localhost).
+public: false
+
+# Set by the platform (the ApplicationSet), not by teams.
+platform:
+  # The environment, taken from the folder name in back-gitops.
+  env: dev
+  # The domain every public service is exposed under.
+  domain: localhost

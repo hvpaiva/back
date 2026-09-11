@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["image"],
+  "properties": {
+    "image": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The image to run, with its tag."
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "The port the service listens on."
+    },
+    "size": {
+      "enum": ["small", "medium", "large"],
+      "description": "How much capacity the service gets."
+    },
+    "public": {
+      "type": "boolean",
+      "description": "Whether to expose the service over HTTP."
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "env": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "domain": { "type": "string" }
+      }
+    }
+  }
+}

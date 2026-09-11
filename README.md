@@ -52,6 +52,7 @@ The justfile exports the same `KUBECONFIG` and `ARGOCD_OPTS`, so its recipes onl
   - `root.yaml` is the app of apps, the only Application applied by hand (`just argocd` does it). It delivers every Application in `apps/`.
   - `apps/argocd.yaml` makes Argo CD manage itself, with the chart values in `argocd/values.yaml`. `just argocd` installs Argo CD once with the same values; after that, upgrading or reconfiguring it is a commit.
   - `apps/projects.yaml` draws the line between the platform and the teams. Applications in the `platform` project can use any namespace and create cluster-wide resources. Applications in the `apps` project can only read `back-gitops` and deliver to namespaces ending in `-dev` or `-prod`.
+- `charts/app` is the golden path for services. A team declares four things in `back-gitops` (image, port, size, and whether it's public); the chart owns everything else: the Deployment, Service and Ingress, probes, resources for each size, and pod security. Its `values.schema.json` rejects anything else.
 
 ## Decisions
 
@@ -62,6 +63,7 @@ The justfile exports the same `KUBECONFIG` and `ARGOCD_OPTS`, so its recipes onl
 - **LocalStack 4.14.0, pinned by digest.** The Community edition ended on 2026-03-23. Newer images require an account and an auth token, and the free plan covers non-commercial use only. 4.14.0 is the last Community release: it runs without a token but gets no updates or security patches, and it never included RDS. State is kept in memory, so restarting the pod wipes it.
 - **Argo CD installed once with Helm, then managing itself.** The bootstrap is the only step that isn't GitOps; from then on, upgrading or reconfiguring Argo CD is a commit.
 - **Argo CD polls Git every minute.** GitHub can't send webhooks to a cluster on a laptop, so changes show up within a minute or so of a push (the default is up to three). The Refresh button in the UI, or `argocd app get <app> --refresh`, checks immediately.
+- **A Helm chart as the golden path for services.** Helm is how many teams already package their services. Here the platform maintains one chart and each service only declares what it needs, a bit like a CircleCI orb. Phase 2 offers the same interface as a Crossplane API, so the two approaches can be compared side by side.
 - **just.** Readable recipes, pinned by mise like the rest of the toolchain.
 - **`setup.sh` in plain bash.** It has to work before mise and just exist.
 - **Public repositories on a personal GitHub account.** Nothing touches company organizations.
