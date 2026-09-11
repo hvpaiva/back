@@ -5,7 +5,8 @@ cluster_name := "back"
 gateway_api_version := "v1.6.1"
 # Traefik v3.7.13.
 traefik_chart_version := "41.5.0"
-# Argo CD v3.5.2.
+# Argo CD v3.5.2. Only used for the first install: afterwards the version in
+# platform/apps/argocd.yaml is the one that counts.
 argocd_chart_version := "10.8.4"
 
 # Same isolation as mise.toml: recipes only ever touch the lab cluster.
@@ -16,8 +17,8 @@ export ARGOCD_OPTS := "--config " + justfile_directory() / ".argocd/config" + " 
 default:
     @just --list --unsorted
 
-# Create the cluster, the base layer and Argo CD (idempotent)
-up: preflight cluster gateway localstack argocd check
+# Create the cluster, the base layer and Argo CD, then wait for Argo CD to deliver the rest (idempotent)
+up: preflight cluster gateway localstack argocd wait check
 
 # Check that this machine is ready for the lab (./setup.sh fixes what it can)
 preflight:
@@ -53,6 +54,33 @@ argocd:
     # The app of apps: delivers every Application in platform/apps/, Argo CD's own included.
     kubectl apply -f platform/root.yaml
 
+# Wait until every Argo CD Application is synced and healthy (up to 10 minutes)
+wait:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Applications appear in waves (root creates the others), so a single
+    # snapshot isn't enough: require two healthy checks in a row.
+    healthy_checks=0
+    for _ in $(seq 120); do
+        pending=$(kubectl --namespace argocd get applications --no-headers \
+            -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status 2>/dev/null |
+            awk '$2 != "Synced" || $3 != "Healthy" { print $1 }' | paste -sd ' ' -)
+        count=$(kubectl --namespace argocd get applications --no-headers 2>/dev/null | wc -l)
+        if [[ -z $pending && $count -gt 1 ]]; then
+            healthy_checks=$((healthy_checks + 1))
+            if ((healthy_checks == 2)); then
+                echo "all $count Applications are synced and healthy"
+                exit 0
+            fi
+        else
+            healthy_checks=0
+            echo "waiting for: ${pending:-the Applications root creates}"
+        fi
+        sleep 5
+    done
+    echo "gave up after 10 minutes; see http://argocd.localhost or: kubectl -n argocd get applications" >&2
+    exit 1
+
 # Print the initial password of Argo CD's admin user
 argocd-password:
     @kubectl --namespace argocd get secret argocd-initial-admin-secret --output jsonpath='{.data.password}' | base64 --decode && echo
@@ -65,11 +93,26 @@ argocd-login:
 headlamp-token:
     @kubectl --namespace headlamp create token headlamp --duration 24h
 
+# Point the lab at your forks: replaces github.com/hvpaiva/ in platform/ with your account and commits
+use-fork owner:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    files=$(git grep -l 'github.com/hvpaiva/' -- platform || true)
+    if [[ -z $files ]]; then
+        echo "platform/ doesn't reference github.com/hvpaiva/ anymore; nothing to do"
+        exit 0
+    fi
+    # perl rather than sed -i, which differs between GNU and BSD.
+    perl -pi -e 's#github\.com/hvpaiva/#github.com/{{owner}}/#g' $files
+    git commit --quiet -m "chore: point the lab at github.com/{{owner}}" -- $files
+    echo "Committed. Next: git push, then just argocd, so Argo CD reads your fork."
+
 # Smoke-test the lab from the host
 check:
     @curl -fsS -o /dev/null http://traefik.localhost/dashboard/ && echo "gateway     ok  http://traefik.localhost/dashboard/"
     @curl -fsS http://localhost:4566/_localstack/health | jq -r '"localstack  ok  \(.edition) \(.version), http://localhost:4566"'
     @curl -fsS http://argocd.localhost/api/version | jq -r '"argocd      ok  \(.Version | split("+")[0]), http://argocd.localhost (user admin, password: just argocd-password)"'
+    @curl -fsS -o /dev/null http://headlamp.localhost/ && echo "headlamp    ok  http://headlamp.localhost (token: just headlamp-token)"
 
 # Delete the cluster and everything in it
 [confirm("Delete the 'back' kind cluster and everything in it? [y/N]")]
