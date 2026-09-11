@@ -22,7 +22,7 @@ image: ghcr.io/hvpaiva/back-hello:sha-4f96edd
 size: medium
 ```
 
-Stages are branches: `staging` deploys to staging, `main` to production. The service's CI runs its own tests and hands the rest to the platform's delivery workflow (`.github/workflows/service.yaml` in this repository), the same for every service.
+Stages are branches: `staging` deploys to staging, `main` to production. The service's CI is two calls to workflows the platform provides in this repository: `go.yaml` checks a Go service (formatting, `go vet`, tests), and `delivery.yaml` does the rest, the same for every service.
 
 Before any of that, a pull request gets checked: the delivery workflow renders `charts/hello/` with the platform's chart for each stage, so a typo or a size the platform doesn't offer fails in the pull request, with the chart's own message.
 
@@ -55,9 +55,14 @@ The platform team owns this repository.
 
 An ApplicationSet reads `charts/*/values.yaml` from each service's repository, once per stage branch, and creates one Application per service and stage (`hello-staging`, `hello-production`) in the `apps` project. Nobody writes those Applications by hand.
 
-### The delivery workflow
+### The workflows services call
 
-`.github/workflows/service.yaml` is a reusable workflow, the GitHub Actions counterpart of a CircleCI orb. A service's CI calls it after its tests, with the service's folder name, and it does the rest the same way for everyone: validation on pull requests, build and deploy on `staging`, promotion on `main`. Services call it at `main`, so a fix to it reaches all of them at once.
+`.github/workflows/` holds reusable workflows, the GitHub Actions counterpart of CircleCI orbs. A service's CI is little more than two calls:
+
+- `go.yaml` checks a Go service: formatting, `go vet` and the tests, with the Go version from its `go.mod`. Services in other languages would get their own.
+- `delivery.yaml` takes the service's folder name and ships it, the same way for every service: validation on pull requests, build and deploy on `staging`, promotion on `main`.
+
+Services call them at `main`, so a fix reaches all of them at once.
 
 ### The golden path
 

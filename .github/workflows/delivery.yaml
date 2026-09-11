@@ -1,8 +1,6 @@
-# Renamed to delivery.yaml; kept until every service calls the new name.
-#
 # The platform's delivery workflow for services, the GitHub Actions version of
-# a CircleCI orb: each service's CI runs its own tests and then calls this
-# workflow, which does the same thing for every service.
+# a CircleCI orb: each service's CI calls it after its checks, and it does the
+# same thing for every service.
 #
 #   pull requests  check charts/<service>/ against the platform's chart
 #   staging        build the image and deploy it to staging
@@ -11,7 +9,7 @@
 # CI never talks to the cluster: deploying is committing the image to the
 # stage's values file, and Argo CD takes it from there. A caller must grant
 # `contents: write` and `packages: write`; see back-hello's CI for an example.
-name: service
+name: delivery
 
 on:
   workflow_call:
