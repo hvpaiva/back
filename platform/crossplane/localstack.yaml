@@ -1,6 +1,3 @@
-# The AWS providers' connection to LocalStack. Namespaced managed resources use
-# the ClusterProviderConfig named `default` unless they name another one.
-# LocalStack accepts any key, so these credentials aren't a secret.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -35,5 +32,4 @@ spec:
   skip_credentials_validation: true
   skip_metadata_api_check: true
   skip_requesting_account_id: true
-  # localstack:4566/<bucket> rather than <bucket>.localstack:4566
   s3_use_path_style: true

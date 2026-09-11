@@ -1,0 +1,13 @@
+{{- if kindIs "map" .Values.bucket }}
+apiVersion: back.lab/v1alpha1
+kind: Bucket
+metadata:
+  name: {{ .Values.application.name }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    # It holds data: dropping `bucket:` or deleting the service leaves it in place.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  versioning: {{ .Values.bucket.versioning | default false }}
+{{- end }}

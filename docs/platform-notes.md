@@ -70,6 +70,18 @@ The AWS provider sends a service's calls to a custom endpoint only if that servi
 
 To read a bucket's tags, the provider calls S3 Control at `<account-id>.<endpoint>`, and it always has an account ID (`000000000000` with LocalStack). AWS has DNS for those names; the cluster didn't, so the bucket never became ready. `cluster/coredns.yaml` adds a CoreDNS rule that answers `<account-id>.localstack.localstack.svc` with LocalStack's Service.
 
+## Deleting a namespace strands its managed resources
+
+Delete a namespace that still holds a managed resource and the resource stays behind, stuck on its finalizer, and so does the namespace. To reach the cloud, the provider first records that the resource uses its ProviderConfig, in an object it creates in the same namespace; a terminating namespace refuses new objects, so the provider never gets as far as deleting anything. Restarting it doesn't help. It's an open Crossplane bug ([crossplane-runtime#1150](https://github.com/crossplane/crossplane-runtime/issues/1150)). Delete the requests first, then the namespace. If one is already stuck, delete the external resource by hand if it still exists, then remove the finalizer.
+
+## Waves in an app of apps don't wait by default
+
+Sync waves order the resources of one Application, and Argo CD waits for each wave to be healthy before the next. But Argo CD 1.8 stopped assessing the health of Applications themselves, so a root Application applies all its children at once. The services would then be created before the APIs their requests use. `platform/argocd/values.yaml` restores that health check, and root waits: Crossplane, then the APIs, then the services. The cost is that a child that never becomes healthy holds back every later wave.
+
+## Drift is checked every ten minutes
+
+A provider compares each managed resource with the cloud every ten minutes by default, so a bucket deleted by hand comes back up to ten minutes later. The lab sets one minute (`--poll=1m`, in `platform/crossplane/providers.yaml`), which costs an API call per resource per minute: fine here, worth measuring with thousands of resources.
+
 ## The argocd CLI and Traefik
 
 Before logging in, `argocd login` probes the server for TLS. Traefik answers that probe with its default certificate, even on port 80, and the CLI then stops to ask whether to proceed. `just argocd-login` skips the probe (`--skip-test-tls`), and `ARGOCD_OPTS` in `mise.toml` sets `--grpc-web --plaintext` for every command.

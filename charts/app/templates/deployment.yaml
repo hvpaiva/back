@@ -31,7 +31,6 @@ spec:
               value: {{ .Values.port | quote }}
             - name: APP_ENV
               value: {{ .Values.platform.stage }}
-            # Where this copy runs, from the Kubernetes downward API.
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -44,6 +43,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+          {{- if kindIs "map" .Values.bucket }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.application.name }}-bucket
+          {{- end }}
           readinessProbe:
             httpGet:
               path: /healthz

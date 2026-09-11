@@ -1,6 +1,4 @@
-# The platform's checks for Go services: formatting, go vet and the tests,
-# with the Go version from the service's go.mod. A service's CI calls it before
-# the delivery workflow; see back-hello's CI for an example.
+# Checks for Go services, with the Go version from the service's go.mod.
 name: go
 
 on:

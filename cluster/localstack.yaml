@@ -1,11 +1,5 @@
-# LocalStack stands in for AWS.
-#
-# The Community edition ended on 2026-03-23: newer images require an account and an
-# auth token, and the free plan is for non-commercial use only. 4.14.0 is the last
-# Community release. It runs without a token, but it is frozen (no updates, no
-# security patches), which is acceptable for a local lab and nothing else.
-#
-# State lives in memory: restarting the pod wipes every bucket and queue.
+# 4.14.0 is the last Community release: later images need an auth token. It gets no
+# updates or security patches. State is in memory; a restart wipes every resource.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -33,7 +27,7 @@ spec:
             - name: edge
               containerPort: 4566
           env:
-            # Don't send usage analytics to LocalStack.
+            # No usage analytics.
             - name: DISABLE_EVENTS
               value: "1"
           readinessProbe:
@@ -48,7 +42,7 @@ spec:
             limits:
               memory: 2Gi
 ---
-# Reachable at localstack.localstack.svc:4566 from pods and at localhost:4566 from the host.
+# localstack.localstack.svc:4566 in the cluster, localhost:4566 on the host.
 apiVersion: v1
 kind: Service
 metadata:

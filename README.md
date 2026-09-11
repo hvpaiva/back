@@ -7,7 +7,7 @@ A local lab that shows how Backstage, Argo CD, Crossplane and Kyverno fit togeth
 
 Everything runs on your machine, in a kind cluster, with LocalStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
 
-> Work in progress: Argo CD and the delivery path for services are in place, and Crossplane is installed; the platform's APIs, Kyverno and Backstage are being added.
+> Work in progress: Argo CD, the delivery path for services and the first platform API (buckets, through Crossplane) are in place; more APIs, Kyverno and Backstage are being added.
 
 ## What this is, and what it isn't
 
@@ -21,7 +21,7 @@ Two perspectives on the same cluster.
 
 ### A developer shipping a service
 
-[hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, and whether it's public. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. Pull requests are checked against the platform's rules before the merge. The developer never touches the cluster and never writes a Kubernetes manifest.
+[hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, whether it's public, and a bucket. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. Pull requests are checked against the platform's rules before the merge. The developer never touches the cluster, never writes a Kubernetes manifest or a Dockerfile, and never creates the bucket: the platform does, and hands the service its details.
 
 <p align="center">
   <img src="docs/images/hello-staging.png" alt="hello in staging: a yellow hang tag showing version sha-de4d439" width="45%">
@@ -30,7 +30,7 @@ Two perspectives on the same cluster.
 
 ### The platform behind it
 
-Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane runs alongside, with an AWS provider that manages resources in LocalStack.
+Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs: a service's request for a bucket becomes an S3 bucket in LocalStack, with the platform's defaults.
 
 ```mermaid
 flowchart LR
@@ -40,9 +40,9 @@ flowchart LR
     argocd[Argo CD] -- reads --> hello
     argocd -- "reads the platform" --> back["back<br/>platform/ + charts/app"]
     argocd -- applies --> cluster["kind cluster<br/>hello-staging<br/>hello-production"]
-    cluster -- pulls --> ghcr
-    argocd -- installs --> crossplane[Crossplane]
-    crossplane -- "AWS provider" --> localstack[(LocalStack)]
+    ghcr -- "image" --> cluster
+    cluster -- "requests a bucket" --> crossplane[Crossplane]
+    crossplane -- "creates it" --> localstack[(LocalStack)]
 ```
 
 ## Run it
@@ -104,8 +104,8 @@ Argo CD can report each deployment back to GitHub: the deployed commit gets an `
 In this repository:
 
 - `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account (LocalStack). `just` installs it.
-- `platform/` is everything Argo CD delivers. `platform/root.yaml`, the only thing applied by hand, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages and its connection to LocalStack.
-- `charts/app/` is the golden path for services. `.github/workflows/` holds the workflows services' CI calls: `go.yaml` checks Go services, `delivery.yaml` validates and ships any service.
+- `platform/` is everything Argo CD delivers. `platform/root.yaml`, the only thing applied by hand, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages and its connection to LocalStack; `platform/apis/` holds the APIs services request resources through.
+- `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls: `go.yaml` checks Go services, `delivery.yaml` validates and ships any service.
 - `docs/` explains [how it works](docs/how-it-works.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
 
 ## Isolation

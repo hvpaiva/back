@@ -1,32 +1,28 @@
-# What a team declares about its service. It lives in the service's own
-# repository: charts/<service>/values.yaml for every stage, plus
-# values-<stage>.yaml for what differs in one stage. values.schema.json
-# rejects anything not listed here.
+# What a service declares, in charts/<service>/values.yaml and values-<stage>.yaml
+# of its repository. values.schema.json rejects anything else.
 
 application:
-  # Names the service's objects, its namespace and its address.
+  # Names its objects, its namespace and its address.
   name: ""
-  # The team that owns the service. Argo CD shows it as a label.
   team: ""
 
-# The image to run, tag included. The service's CI writes it into
-# values-<stage>.yaml on every deploy, so Git always says what runs where.
+# Written into values-<stage>.yaml by the delivery workflow on every deploy.
 image: ""
 
-# The port the service listens on. It must answer GET /healthz there.
+# Must answer GET /healthz.
 port: 8080
 
-# The capacity the service gets: small, medium or large. What each size means
-# is the platform's call (_helpers.tpl).
+# small, medium or large; see _helpers.tpl.
 size: small
 
-# Expose the service over HTTP, at http://<name>.<stage>.localhost
-# (http://<name>.localhost in production).
+# Serve at http://<name>.<stage>.localhost (http://<name>.localhost in production).
 public: false
 
-# Filled in by the platform's ApplicationSet, never by teams.
+# An S3 bucket: `{}`, or `versioning: true` to keep every version of each object.
+# Its name and credentials reach the service as BUCKET_NAME and AWS_* variables.
+bucket: null
+
+# Set by the platform's ApplicationSet, never by services.
 platform:
-  # The stage, from the branch the values were read from.
   stage: staging
-  # The domain public services are exposed under.
   domain: localhost

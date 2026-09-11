@@ -1,6 +1,4 @@
-# Lab lifecycle. Run `just` to list the recipes.
-
-# Optional settings, such as the GitHub App for deploy statuses (see .env.example).
+# Optional settings (see .env.example).
 set dotenv-load
 
 cluster_name := "back"
@@ -8,11 +6,10 @@ cluster_name := "back"
 gateway_api_version := "v1.6.1"
 # Traefik v3.7.13.
 traefik_chart_version := "41.5.0"
-# Argo CD v3.5.2. Only used for the first install: afterwards the version in
-# platform/apps/argocd.yaml is the one that counts.
+# Argo CD v3.5.2, for the first install only; platform/apps/argocd.yaml owns it after that.
 argocd_chart_version := "10.8.4"
 
-# Same isolation as mise.toml: recipes only ever touch the lab cluster.
+# Same isolation as mise.toml: recipes only touch the lab cluster.
 export KUBECONFIG := justfile_directory() / ".kube/config"
 export ARGOCD_OPTS := "--config " + justfile_directory() / ".argocd/config" + " --grpc-web --plaintext"
 
@@ -55,7 +52,6 @@ argocd:
         helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version {{argocd_chart_version}} \
             --namespace argocd --create-namespace --values platform/argocd/values.yaml --wait
     fi
-    # The app of apps: delivers every Application in platform/apps/, Argo CD's own included.
     kubectl apply -f platform/root.yaml
 
 # Give Argo CD the GitHub App it uses to report deployments to GitHub (optional; reads .env)
@@ -68,7 +64,6 @@ notifications:
     fi
     key_file=${GITHUB_APP_PRIVATE_KEY_FILE:?set GITHUB_APP_PRIVATE_KEY_FILE in .env}
     key_file=${key_file/#\~/$HOME}
-    # The key is read from disk into the cluster; it never goes into Git.
     kubectl --namespace argocd create secret generic argocd-notifications-secret \
         --from-literal=github-appID="$GITHUB_APP_ID" \
         --from-literal=github-installationID="${GITHUB_APP_INSTALLATION_ID:?set GITHUB_APP_INSTALLATION_ID in .env}" \
@@ -80,8 +75,7 @@ notifications:
 wait:
     #!/usr/bin/env bash
     set -euo pipefail
-    # Applications appear in waves (root creates the others), so a single
-    # snapshot isn't enough: require two healthy checks in a row.
+    # root creates the other Applications in waves: require two healthy checks in a row.
     healthy_checks=0
     for _ in $(seq 120); do
         pending=$(kubectl --namespace argocd get applications --no-headers \
@@ -136,8 +130,12 @@ check:
     @curl -fsS http://argocd.localhost/api/version | jq -r '"argocd      ok  \(.Version | split("+")[0]), http://argocd.localhost (user admin, password: just argocd-password)"'
     @curl -fsS -o /dev/null http://headlamp.localhost/ && echo "headlamp    ok  http://headlamp.localhost (token: just headlamp-token)"
     @kubectl get providers.pkg.crossplane.io,functions.pkg.crossplane.io --output json | jq -er '.items | if length > 0 and all(any(.status.conditions[]?; .type == "Healthy" and .status == "True")) then "crossplane  ok  \(map(select(.kind == "Provider")) | length) providers and \(map(select(.kind == "Function")) | length) functions healthy (kubectl get providers,functions)" else error("some Crossplane packages are not healthy: kubectl get providers,functions") end'
-    @curl -fsS http://hello.staging.localhost/api/info | jq -r '"hello       ok  \(.version) in staging, http://hello.staging.localhost"'
-    @curl -fsS http://hello.localhost/api/info | jq -r '"hello       ok  \(.version) in production, http://hello.localhost"'
+    @just _check-hello staging http://hello.staging.localhost
+    @just _check-hello production http://hello.localhost
+
+[private]
+_check-hello stage url:
+    @curl -fsS {{url}}/api/info | jq -er --arg stage {{stage}} --arg url {{url}} 'if .bucket and (.bucket.reachable | not) then error("hello in \($stage) does not reach its bucket \(.bucket.name)") else "hello       ok  \(.version) in \($stage)\(if .bucket then ", bucket \(.bucket.name)" else "" end), \($url)" end'
 
 # Delete the cluster and everything in it
 [confirm("Delete the 'back' kind cluster and everything in it? [y/N]")]

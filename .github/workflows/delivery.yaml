@@ -1,14 +1,6 @@
-# The platform's delivery workflow for services, the GitHub Actions version of
-# a CircleCI orb: each service's CI calls it after its checks, and it does the
-# same thing for every service.
-#
-#   pull requests  check charts/<service>/ against the platform's chart
-#   staging        build the image and deploy it to staging
-#   main           promote the image staging runs to production
-#
-# CI never talks to the cluster: deploying is committing the image to the
-# stage's values file, and Argo CD takes it from there. A caller must grant
-# `contents: write` and `packages: write`; see back-hello's CI for an example.
+# Delivery for services: validates charts/<service>/ on pull requests, builds and
+# deploys on staging, promotes on main. Deploying is a commit to the stage's values
+# file; Argo CD does the rest. Callers grant `contents: write` and `packages: write`.
 name: delivery
 
 on:
@@ -26,6 +18,14 @@ on:
         description: The platform version to validate against (what Argo CD deploys with)
         type: string
         default: main
+      language:
+        description: Picks the platform's Dockerfile, build/<language>.Dockerfile
+        type: string
+        default: go
+      dockerfile:
+        description: The service's own Dockerfile, to use instead of the platform's
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -34,9 +34,7 @@ env:
   SERVICE: ${{ inputs.service }}
 
 jobs:
-  # Renders the service's values with the platform's chart for each stage, so
-  # a typo or a missing field fails here, in the pull request, instead of at
-  # sync time (or worse, stopping the ApplicationSet for every service).
+  # A broken values file would also stop the ApplicationSet for every service.
   validate:
     runs-on: ubuntu-24.04
     permissions:
@@ -68,11 +66,8 @@ jobs:
           done
           exit $status
 
-  # Decides what a push to a stage branch needs.
-  #   staging: a new image, unless the push only touched charts/ (the deploy
-  #            configuration, which Argo CD applies as it is) or documentation.
-  #   main:    a promotion, only if the push changed the image staging runs,
-  #            as merging staging does. Reverting a promotion doesn't.
+  # staging builds unless the push only touched charts/ or docs; main promotes only
+  # when the push changed staging's image, so reverting a promotion isn't undone.
   plan:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
@@ -123,6 +118,12 @@ jobs:
       IMAGE: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.platform-repository }}
+          ref: ${{ inputs.platform-ref }}
+          path: .platform
+          persist-credentials: false
 
       - name: Pick the image tag
         id: tag
@@ -136,6 +137,8 @@ jobs:
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
+          context: .
+          file: ${{ inputs.dockerfile || format('.platform/build/{0}.Dockerfile', inputs.language) }}
           push: true
           tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
           build-args: VERSION=${{ steps.tag.outputs.tag }}
@@ -172,7 +175,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Production runs exactly the image that ran in staging: nothing is rebuilt.
       - name: Promote the image staging ran
         run: |
           IMAGE=$(yq '.image' "$CHART_DIR/values-staging.yaml")

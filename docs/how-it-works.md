@@ -4,7 +4,7 @@ The lab has two kinds of users. A developer wants to ship a service without lear
 
 ## Shipping a change (the developer's side)
 
-The service's repository has everything the developer touches: code, tests, a Dockerfile, a CI workflow, and a `charts/<service>/` folder that says what the service needs.
+The service's repository has everything the developer touches: code, tests, a CI workflow, and a `charts/<service>/` folder that says what the service needs.
 
 ```yaml
 # charts/hello/values.yaml: every stage
@@ -14,19 +14,22 @@ application:
 port: 8080
 size: small
 public: true
+bucket: {}
 ```
 
 ```yaml
 # charts/hello/values-production.yaml: only what differs in production
 image: ghcr.io/hvpaiva/back-hello:sha-4f96edd
 size: medium
+bucket:
+  versioning: true
 ```
 
-Stages are branches: `staging` deploys to staging, `main` to production. The service's CI is two calls to workflows the platform provides in this repository: `go.yaml` checks a Go service (formatting, `go vet`, tests), and `delivery.yaml` does the rest, the same for every service.
+`bucket:` asks the platform for an S3 bucket; the service gets its name and credentials as `BUCKET_NAME` and `AWS_*` environment variables, and hello's page shows whether it reaches it. Stages are branches: `staging` deploys to staging, `main` to production. The service's CI is two calls to workflows the platform provides in this repository: `go.yaml` checks a Go service (formatting, `go vet`, tests), and `delivery.yaml` does the rest, the same for every service.
 
 Before any of that, a pull request gets checked: the delivery workflow renders `charts/hello/` with the platform's chart for each stage, so a typo or a size the platform doesn't offer fails in the pull request, with the chart's own message.
 
-1. Push to `staging`. CI runs the tests, builds the image, tags it with the commit (`sha-<commit>`) and commits that image to `values-staging.yaml` on the same branch. In GitHub you see the workflow run and a commit from `github-actions[bot]`.
+1. Push to `staging`. CI runs the tests, builds the image with the platform's Dockerfile for Go, tags it with the commit (`sha-<commit>`) and commits that image to `values-staging.yaml` on the same branch. In GitHub you see the workflow run and a commit from `github-actions[bot]`.
 2. Argo CD notices the commit. It checks the repository every minute, so the `hello-staging` Application goes *OutOfSync*, then *Synced*, while the new pods roll out (*Progressing*) until they're ready (*Healthy*). The Argo CD UI shows each of those steps; Headlamp shows the pods themselves. If the lab has a GitHub App configured, GitHub shows the outcome too: the deployed commit gets an `argocd/hello-staging` status, and the version appears under the repository's Deployments.
 3. The page updates itself. http://hello.staging.localhost reloads when the new version answers, and the hang tag's barcode changes with the version.
 4. Promote with a pull request from `staging` to `main`. Merging it makes CI copy the image staging was running into `values-production.yaml`. Nothing is rebuilt, so production runs exactly what was tested.
@@ -44,7 +47,7 @@ The platform team owns this repository.
 
 ### Argo CD and what it delivers
 
-`just up` installs Argo CD with Helm and applies `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. The same folder holds the AppProjects that separate the platform from the teams:
+`just up` installs Argo CD with Helm and applies `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp and Crossplane, then the platform's APIs, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
 
 | Project | May read from | May deliver to | Cluster-wide objects |
 |---|---|---|---|
@@ -60,13 +63,15 @@ An ApplicationSet reads `charts/*/values.yaml` from each service's repository, o
 `.github/workflows/` holds reusable workflows, the GitHub Actions counterpart of CircleCI orbs. A service's CI is little more than two calls:
 
 - `go.yaml` checks a Go service: formatting, `go vet` and the tests, with the Go version from its `go.mod`. Services in other languages would get their own.
-- `delivery.yaml` takes the service's folder name and ships it, the same way for every service: validation on pull requests, build and deploy on `staging`, promotion on `main`.
+- `delivery.yaml` takes the service's folder name and ships it, the same way for every service: validation on pull requests, build and deploy on `staging`, promotion on `main`. It builds the image with the platform's Dockerfile for the service's language, `build/go.Dockerfile` by default; a service with special needs can pass its own.
 
 Services call them at `main`, so a fix reaches all of them at once.
 
-### Crossplane
+### Crossplane and the platform's APIs
 
-`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the platform's APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS provider for S3, and its connection to LocalStack. The first sync goes in waves, because each wave uses kinds the one before installs: Crossplane, then the packages, then the provider's settings. Of the 50 resource types the S3 provider ships, Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`.
+`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS provider for S3, and its connection to LocalStack. Of the 50 resource types the S3 provider ships, Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`.
+
+`platform/apis/` holds the APIs services request resources through. The first is `Bucket` (`back.lab/v1alpha1`): a service asks for one with `bucket:` in its values, the chart renders the request in the service's namespace, and the Composition turns it into an S3 bucket named `<namespace>-<name>`, with versioning if asked for, plus a Secret `<name>-bucket` the service reads its connection from. `kubectl get buckets.back.lab -A` lists the requests; `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became.
 
 ### The golden path
 
@@ -78,6 +83,7 @@ Every service is deployed by the same chart, `charts/app`, fed by the service's 
 | the port it listens on | liveness and readiness probes on `/healthz` |
 | a size: small, medium or large | replicas, CPU and memory for each size |
 | whether it's public | the address: `<name>.<stage>.localhost`, `<name>.localhost` in production |
+| a bucket, with or without versioning | its name, region and credentials, and that removing it never deletes the data |
 | | non-root user, read-only filesystem, no Kubernetes API token |
 
 `values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed (say, routes through Gateway API instead of Ingress) by changing the chart, without touching a single service repository.

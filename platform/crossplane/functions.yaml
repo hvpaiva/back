@@ -1,5 +1,3 @@
-# The steps the platform's Compositions run: go-templating renders resources from
-# Helm-like templates, auto-ready marks a request ready when all it made is ready.
 apiVersion: pkg.crossplane.io/v1
 kind: Function
 metadata:

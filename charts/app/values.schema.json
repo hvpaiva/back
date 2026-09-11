@@ -37,6 +37,13 @@
     "public": {
       "type": "boolean"
     },
+    "bucket": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "versioning": { "type": "boolean" }
+      }
+    },
     "platform": {
       "type": "object",
       "additionalProperties": false,

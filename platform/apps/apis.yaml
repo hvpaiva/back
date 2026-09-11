@@ -1,19 +1,22 @@
-# Applied by `just argocd`. It stays in `default` because it creates the other projects.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root
+  name: apis
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
-  project: default
+  project: platform
   source:
     repoURL: https://github.com/hvpaiva/back.git
     targetRevision: main
-    path: platform/apps
+    path: platform/apis
+    directory:
+      recurse: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
   syncPolicy:
     automated:
-      prune: true
+      # Deleting an XRD deletes every request made through it.
+      prune: false
       selfHeal: true

@@ -3,6 +3,9 @@ kind: ApplicationSet
 metadata:
   name: services
   namespace: argocd
+  annotations:
+    # After the platform's APIs, which the services' requests need.
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]

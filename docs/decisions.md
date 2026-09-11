@@ -20,11 +20,14 @@ Why the lab is built the way it is. Most of these trade realism for something th
 - Deploy feedback comes from Argo CD, not from CI. CI is done once it commits the image; Argo CD tells GitHub when that version is running and healthy, through a GitHub App, so CI still needs no access to the cluster.
 - The platform maintains the services' CI too: checks per language (`go.yaml` for now) and one delivery workflow for all. Services call them at `main`, the same trade-off as the chart: a fix reaches every service at once, and so does a mistake. A service that needs stability can pin a commit instead.
 - A Helm chart as the golden path. Helm is how many teams already package their services. Here the platform maintains one chart, and each service only declares what it needs, much like a CircleCI orb.
+- The platform provides the Dockerfile, one per language (`build/go.Dockerfile`). Services don't carry build details, and a base image or compiler update reaches all of them at once. A service with special needs can still pass its own.
 - Services in public GitHub repositories on a personal account. Argo CD reads them without credentials, and no company system is involved.
 
 ## Crossplane
 
 - Crossplane v2, with namespaced managed resources. What a service requests, and what that creates, lives in the service's namespace.
+- A service requests infrastructure in the same values files as everything else (`bucket:`), and the platform's chart renders the request. It goes through the same pull request, validation and promotion, and staging and production get separate resources. The alternative, request files in a separate repository, gives shared infrastructure a home but splits what a service needs across two places.
+- Argo CD never deletes a service's data on its own: the requests the chart renders are exempt from pruning and from deletion with their Application, and the APIs themselves aren't pruned either, since deleting an XRD deletes every request made through it. Removing any of them is an explicit operation.
 - AWS providers built by crossplane-contrib. Upbound publishes the same providers, but only their latest version is free; contrib's builds are Apache 2.0 and every version stays available.
 - Only the resource types the platform uses are activated. The S3 provider alone ships 50, and each active one is a CRD the API server and Argo CD keep track of. With so few, the lab doesn't need the higher Argo CD API rate limit that Crossplane's Argo CD guide recommends.
 - Every package pinned in Git, dependencies included. The family provider is declared rather than left to Crossplane's dependency resolution, which would install whatever version it finds.

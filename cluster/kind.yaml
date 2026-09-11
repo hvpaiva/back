@@ -1,23 +1,21 @@
-# The lab cluster. A single node is enough for everything here and keeps memory low.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: back
 nodes:
   - role: control-plane
-    # Kubernetes 1.35 instead of kind's default (1.37): a release that Argo CD,
-    # Crossplane and Kyverno have had months to support.
+    # 1.35 rather than kind's default 1.37, which Argo CD, Crossplane and Kyverno support.
     image: kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
-    # Host ports are bound to 127.0.0.1, so nothing in the lab is reachable from the network.
+    # Bound to 127.0.0.1: nothing in the lab is reachable from the network.
     extraPortMappings:
-      # Traefik "web" entrypoint: http://<name>.localhost
+      # Traefik web
       - containerPort: 30080
         hostPort: 80
         listenAddress: "127.0.0.1"
-      # Traefik "websecure" entrypoint
+      # Traefik websecure
       - containerPort: 30443
         hostPort: 443
         listenAddress: "127.0.0.1"
-      # LocalStack: http://localhost:4566
+      # LocalStack
       - containerPort: 31566
         hostPort: 4566
         listenAddress: "127.0.0.1"

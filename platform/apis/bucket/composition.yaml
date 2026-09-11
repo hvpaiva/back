@@ -1,0 +1,68 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: bucket-s3
+spec:
+  compositeTypeRef:
+    apiVersion: back.lab/v1alpha1
+    kind: Bucket
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $bucket := printf "%s-%s" $xr.metadata.namespace $xr.metadata.name }}
+            {{- $region := "us-east-1" }}
+            ---
+            apiVersion: s3.aws.m.upbound.io/v1beta1
+            kind: Bucket
+            metadata:
+              annotations:
+                {{ setResourceNameAnnotation "bucket" }}
+                crossplane.io/external-name: {{ $bucket }}
+            spec:
+              forProvider:
+                region: {{ $region }}
+            {{- if $xr.spec.versioning }}
+            ---
+            apiVersion: s3.aws.m.upbound.io/v1beta1
+            kind: BucketVersioning
+            metadata:
+              annotations:
+                {{ setResourceNameAnnotation "versioning" }}
+            spec:
+              forProvider:
+                region: {{ $region }}
+                bucketSelector:
+                  matchControllerRef: true
+                versioningConfiguration:
+                  status: Enabled
+            {{- end }}
+            ---
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: {{ $xr.metadata.name }}-bucket
+              annotations:
+                {{ setResourceNameAnnotation "connection" }}
+            stringData:
+              BUCKET_NAME: {{ $bucket }}
+              AWS_REGION: {{ $region }}
+              AWS_ENDPOINT_URL: http://localstack.localstack.svc:4566
+              AWS_ACCESS_KEY_ID: test
+              AWS_SECRET_ACCESS_KEY: test
+            ---
+            apiVersion: back.lab/v1alpha1
+            kind: Bucket
+            status:
+              bucketName: {{ $bucket }}
+    - step: ready
+      functionRef:
+        name: function-auto-ready

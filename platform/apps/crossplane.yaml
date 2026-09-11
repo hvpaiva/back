@@ -1,6 +1,3 @@
-# Crossplane, plus its functions, the AWS provider and the provider's connection
-# to LocalStack (platform/crossplane/). Those objects sync in waves 1 and 2,
-# once the kinds they use exist.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -15,7 +12,6 @@ spec:
       helm:
         valuesObject:
           provider:
-            # Activations are declared in platform/crossplane/providers.yaml.
             defaultActivations: []
     - repoURL: https://github.com/hvpaiva/back.git
       targetRevision: main

@@ -1,6 +1,5 @@
-# kind's default CoreDNS configuration plus the `rewrite` rule. AWS serves some
-# APIs (S3 Control among them) at <account-id>.<endpoint>, and the rule sends
-# <account-id>.localstack.localstack.svc to LocalStack.
+# kind's default CoreDNS configuration plus `rewrite`: the AWS provider calls
+# S3 Control at <account-id>.<endpoint>.
 apiVersion: v1
 kind: ConfigMap
 metadata:
