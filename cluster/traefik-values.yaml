@@ -1,5 +1,5 @@
 # Traefik is the lab's entry point. It serves both classic Ingress and Gateway API,
-# so a composition can move from one to the other without changing the cluster.
+# so the platform can move services from one to the other without touching the cluster.
 
 # kind has no load balancer; these node ports are mapped to the host in kind.yaml.
 service:

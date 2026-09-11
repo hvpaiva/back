@@ -1,81 +1,93 @@
 # BACK lab
 
-A local, self-contained lab for the BACK stack (Backstage, Argo CD, Crossplane and Kyverno), built to understand how the four tools connect: from a developer asking for a new service to the resources that end up running.
+A local lab that shows how Backstage, Argo CD, Crossplane and Kyverno fit together as an internal developer platform: what a developer does to ship a service, what the platform team builds so that it takes so little, and what happens in between.
 
-Everything runs on one machine, in a single kind cluster, with LocalStack standing in for AWS. No company clusters, cloud accounts or repositories are involved.
+Everything runs on your machine, in a kind cluster, with LocalStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
 
-## Quick start
+> Work in progress: Argo CD and the delivery path for services are in place; Crossplane, Kyverno and Backstage are being added.
+
+## What this is, and what it isn't
+
+It's a reference setup you can run, poke at and read. It makes the connections between the tools visible, along with the rough edges a platform team hits when putting them together.
+
+It isn't a course. It doesn't teach each tool from scratch; their own documentation does that better. It isn't production-ready either: one node, no TLS, admin credentials, and an AWS emulator that no longer gets updates.
+
+## What you'll see
+
+Two perspectives on the same cluster.
+
+### A developer shipping a service
+
+[hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, and whether it's public. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. The developer never touches the cluster and never writes a Kubernetes manifest.
+
+### The platform behind it
+
+Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Argo CD projects decide what each team may deploy, and where.
+
+```mermaid
+flowchart LR
+    dev([Developer]) -- git push --> hello["back-hello<br/>code + charts/hello"]
+    hello -- "CI: test, build" --> ghcr[(ghcr.io)]
+    hello -. "CI commits the new image<br/>to values-staging.yaml" .-> hello
+    argocd[Argo CD] -- reads --> hello
+    argocd -- "reads the platform's chart" --> back["back<br/>charts/app"]
+    argocd -- applies --> cluster["kind cluster<br/>hello-staging, hello-production"]
+    cluster -- pulls --> ghcr
+```
+
+## Run it
 
 Tested on Ubuntu 24.04, where `setup.sh` also installs what's missing. On other systems it runs the same checks and tells you what to install.
 
 ```sh
-./setup.sh   # check this machine and offer to install what's missing
-just up      # create the cluster, the base layer and Argo CD (idempotent, ~2 min)
-just         # list every recipe
-just down    # delete the cluster
+git clone https://github.com/hvpaiva/back.git && cd back
+./setup.sh   # checks this machine and offers to install what's missing, asking first
+just up      # creates the cluster and waits until everything is healthy (a few minutes)
 ```
 
-`setup.sh` checks curl, git, Docker, free ports (80, 443, 4566), RAM, disk, [mise](https://mise.jdx.dev) and the toolchain pinned in `mise.toml`. For anything missing it offers a fix: on Ubuntu, curl and git through apt and Docker Engine through Docker's apt repository; anywhere, mise through its official installer, the pinned toolchain, and a line in your shell rc that activates mise. Every change asks first. `./setup.sh --check` only checks, and `just up` runs it before doing anything.
+`setup.sh` checks Docker, free ports (80, 443, 4566), RAM, disk and the tools pinned in `mise.toml`, and can add a line to your shell rc that activates [mise](https://mise.jdx.dev). If mise isn't active in your shell, prefix commands with `mise exec --`, as in `mise exec -- just up`.
 
-If mise isn't active in your shell, prefix commands with `mise exec --`, as in `mise exec -- just up`.
+| What | Where |
+|---|---|
+| Argo CD | http://argocd.localhost (user `admin`, password from `just argocd-password`) |
+| Headlamp | http://headlamp.localhost (token from `just headlamp-token`) |
+| hello | http://hello.staging.localhost and http://hello.localhost |
+| Traefik | http://traefik.localhost/dashboard/ |
+| LocalStack | http://localhost:4566 |
 
-The base layer and Argo CD use about 1.5 GB of RAM and 5 GB of disk.
+`just` lists every recipe, and `just down` deletes the cluster.
 
-## What's running
+Run this way, the lab follows the repositories above on GitHub. Everything works and you can inspect all of it, but you can't change what it deploys: Argo CD reads GitHub, not your disk.
 
-| Component | Role | Reach it at |
-|---|---|---|
-| kind, Kubernetes 1.35 | The single-node cluster the whole lab lives in | `kubectl`, from this directory |
-| Traefik 3.7 | Entry point, serving both Ingress and Gateway API | `http://<name>.localhost`; dashboard at http://traefik.localhost/dashboard/ |
-| LocalStack 4.14.0 | Stands in for AWS (S3, SQS, DynamoDB, …) | `http://localhost:4566` from the host; `http://localstack.localstack.svc:4566` from pods |
-| Argo CD 3.5 | Delivers everything above the base layer from Git | http://argocd.localhost (user `admin`, password from `just argocd-password`); `just argocd-login` logs the `argocd` CLI in |
-| Headlamp 0.45 | Web UI for everything in the cluster (the successor of the Kubernetes Dashboard) | http://headlamp.localhost, with a token from `just headlamp-token` |
+## Run it from your own GitHub
 
-To expose something, point an `Ingress` (class `traefik`, the default) or an `HTTPRoute` (parent: Gateway `traefik-gateway` in namespace `traefik`) at a hostname ending in `.localhost`.
+Watching a change flow through the lab means pushing to repositories Argo CD watches, so you need your own copies. These steps are on you; the lab can't do them:
+
+1. Fork [back](https://github.com/hvpaiva/back) and [back-hello](https://github.com/hvpaiva/back-hello). When forking back-hello, uncheck *Copy the main branch only*: the lab deploys its `staging` branch too.
+2. Turn on GitHub Actions in your back-hello fork. GitHub disables workflows in forks; the Actions tab has the button.
+3. Point the lab at your forks, from a clone of your back fork:
+   ```sh
+   just use-fork <your-github-user>   # rewrites the repository URLs in platform/ and commits
+   git push
+   ```
+4. Start the lab with `just up`, or run `just argocd` if it's already running.
+
+Then push a change to your back-hello `staging` branch. CI builds `ghcr.io/<you>/back-hello` and commits the new image, and within a minute or so Argo CD rolls it out: the page at http://hello.staging.localhost reloads with the new version. If the pods can't pull the image, GitHub created the package as private; make it public in the package settings.
+
+## How it's put together
+
+| Repository | What it holds |
+|---|---|
+| [back](https://github.com/hvpaiva/back) (this one) | The platform: the cluster's base layer, everything Argo CD delivers, and the chart services use |
+| [back-hello](https://github.com/hvpaiva/back-hello) | A sample service: its code, its CI and its deploy configuration |
+
+In this repository:
+
+- `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account. `just` installs it.
+- `platform/` is everything Argo CD delivers, starting with Argo CD itself. `platform/root.yaml` is the only thing applied by hand.
+- `charts/app/` is the golden path for services.
+- `docs/` explains [how it works](docs/how-it-works.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
 
 ## Isolation
 
-Inside this directory, `mise.toml` sets:
-
-- `KUBECONFIG` to `.kube/config` (git-ignored), so `kubectl` and `helm` can only reach the lab cluster.
-- `ARGOCD_OPTS`, so the `argocd` CLI keeps its login in `.argocd/` (git-ignored) instead of `~/.config/argocd`.
-- `AWS_ENDPOINT_URL` and dummy credentials, so every AWS call goes to LocalStack even if real AWS profiles are configured.
-
-The justfile exports the same `KUBECONFIG` and `ARGOCD_OPTS`, so its recipes only ever touch the lab cluster. Host ports are bound to `127.0.0.1` only.
-
-`*.localhost` resolves to this machine only on the host. Inside the cluster, use Service DNS names (`<service>.<namespace>.svc`).
-
-## Layout
-
-- `cluster/` holds the base layer: what an infrastructure team would hand us (a cluster, an ingress, a cloud account). It's installed by `just`, not by GitOps.
-- `platform/` holds what the platform team runs on top, declared in Git and delivered by Argo CD, starting with Argo CD itself:
-  - `root.yaml` is the app of apps, the only Application applied by hand (`just argocd` does it). It delivers every Application in `apps/`.
-  - `apps/argocd.yaml` makes Argo CD manage itself, with the chart values in `argocd/values.yaml`. `just argocd` installs Argo CD once with the same values; after that, upgrading or reconfiguring it is a commit.
-  - `apps/projects.yaml` draws the line between the platform and the teams. Applications in the `platform` project can use any namespace and create cluster-wide resources. Applications in the `apps` project can only read `back-gitops` and deliver to namespaces ending in `-dev` or `-prod`.
-- `charts/app` is the golden path for services. A team declares four things in `back-gitops` (image, port, size, and whether it's public); the chart owns everything else: the Deployment, Service and Ingress, probes, resources for each size, and pod security. Its `values.schema.json` rejects anything else.
-
-## Decisions
-
-- **A single kind node.** Enough for the whole lab, and the lightest option.
-- **Kubernetes 1.35 instead of kind's default 1.37.** Argo CD, Crossplane and Kyverno have had months to support it.
-- **Traefik.** It serves Ingress and Gateway API at the same time, so a platform abstraction can move from one to the other without changes to the cluster. ingress-nginx reached end of life in March 2026.
-- **Gateway API CRDs v1.6.1, installed before Traefik.** It's the version Traefik 3.7 is built against.
-- **LocalStack 4.14.0, pinned by digest.** The Community edition ended on 2026-03-23. Newer images require an account and an auth token, and the free plan covers non-commercial use only. 4.14.0 is the last Community release: it runs without a token but gets no updates or security patches, and it never included RDS. State is kept in memory, so restarting the pod wipes it.
-- **Argo CD installed once with Helm, then managing itself.** The bootstrap is the only step that isn't GitOps; from then on, upgrading or reconfiguring Argo CD is a commit.
-- **Argo CD polls Git every minute.** GitHub can't send webhooks to a cluster on a laptop, so changes show up within a minute or so of a push (the default is up to three). The Refresh button in the UI, or `argocd app get <app> --refresh`, checks immediately.
-- **A Helm chart as the golden path for services.** Helm is how many teams already package their services. Here the platform maintains one chart and each service only declares what it needs, a bit like a CircleCI orb. Phase 2 offers the same interface as a Crossplane API, so the two approaches can be compared side by side.
-- **just.** Readable recipes, pinned by mise like the rest of the toolchain.
-- **`setup.sh` in plain bash.** It has to work before mise and just exist.
-- **Public repositories on a personal GitHub account.** Nothing touches company organizations.
-
-## Roadmap
-
-| Phase | Outcome | Status |
-|---|---|---|
-| 0. Base layer | `just up` creates the cluster, the gateway and LocalStack | Done |
-| 1. GitOps first | Argo CD manages itself and the platform; sample app via ApplicationSet; CI builds the image and bumps the tag in Git; promotion between environments via PR | In progress |
-| 2. Crossplane | `Bucket`, `Database` and `App` platform APIs, delivered by Argo CD | |
-| 3. Evolving the platform | Composition revisions (Ingress → Gateway API), a second implementation behind the same API, adopting Terraform-managed resources, drift correction | |
-| 4. Kyverno | CEL policies on the platform APIs, audit → enforce, team onboarding via generate rules, policy checks in CI | |
-| 5. Backstage | "New service" template (repo + PR), catalog with Kubernetes, Argo CD, Crossplane and Kyverno plugins | |
-| 6. Demo | Script, pre-baked states, backup recording | |
+Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at the lab cluster only, and keeps their credentials in git-ignored folders here rather than in your home directory. AWS calls go to LocalStack with dummy credentials, even if real AWS profiles are configured. Host ports are bound to 127.0.0.1, so nothing is reachable from your network.

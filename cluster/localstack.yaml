@@ -5,8 +5,7 @@
 # Community release. It runs without a token, but it is frozen (no updates, no
 # security patches), which is acceptable for a local lab and nothing else.
 #
-# State lives in memory: restarting the pod wipes every bucket and queue. Crossplane
-# notices and recreates what it manages.
+# State lives in memory: restarting the pod wipes every bucket and queue.
 apiVersion: v1
 kind: Namespace
 metadata:
