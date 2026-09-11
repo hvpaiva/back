@@ -64,6 +64,10 @@ An ApplicationSet reads `charts/*/values.yaml` from each service's repository, o
 
 Services call them at `main`, so a fix reaches all of them at once.
 
+### Crossplane
+
+`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the platform's APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS provider for S3, and its connection to LocalStack. The first sync goes in waves, because each wave uses kinds the one before installs: Crossplane, then the packages, then the provider's settings. Of the 50 resource types the S3 provider ships, Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`.
+
 ### The golden path
 
 Every service is deployed by the same chart, `charts/app`, fed by the service's own values. Who decides what:

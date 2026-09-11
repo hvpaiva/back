@@ -1,0 +1,39 @@
+# The AWS providers' connection to LocalStack. Namespaced managed resources use
+# the ClusterProviderConfig named `default` unless they name another one.
+# LocalStack accepts any key, so these credentials aren't a secret.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: localstack-credentials
+  namespace: crossplane-system
+stringData:
+  credentials: |
+    [default]
+    aws_access_key_id = test
+    aws_secret_access_key = test
+---
+apiVersion: aws.m.upbound.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: crossplane-system
+      name: localstack-credentials
+      key: credentials
+  endpoint:
+    # Only these services go to LocalStack; any other would go to AWS itself.
+    services: [s3, s3control]
+    hostnameImmutable: true
+    url:
+      type: Static
+      static: http://localstack.localstack.svc:4566
+  skip_credentials_validation: true
+  skip_metadata_api_check: true
+  skip_requesting_account_id: true
+  # localstack:4566/<bucket> rather than <bucket>.localstack:4566
+  s3_use_path_style: true

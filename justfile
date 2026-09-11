@@ -39,9 +39,10 @@ gateway:
     helm upgrade --install traefik oci://ghcr.io/traefik/helm/traefik --version {{traefik_chart_version}} \
         --namespace traefik --create-namespace --values cluster/traefik-values.yaml --wait
 
-# Deploy LocalStack (last Community image, no auth token)
+# Deploy LocalStack (last Community image, no auth token) and its DNS rule
 localstack:
     kubectl apply -f cluster/localstack.yaml
+    kubectl apply --server-side --force-conflicts -f cluster/coredns.yaml
     kubectl --namespace localstack rollout status deployment/localstack --timeout=5m
 
 # Install Argo CD once and apply the root Application; from then on, Argo CD manages itself from Git
@@ -134,6 +135,7 @@ check:
     @curl -fsS http://localhost:4566/_localstack/health | jq -r '"localstack  ok  \(.edition) \(.version), http://localhost:4566"'
     @curl -fsS http://argocd.localhost/api/version | jq -r '"argocd      ok  \(.Version | split("+")[0]), http://argocd.localhost (user admin, password: just argocd-password)"'
     @curl -fsS -o /dev/null http://headlamp.localhost/ && echo "headlamp    ok  http://headlamp.localhost (token: just headlamp-token)"
+    @kubectl get providers.pkg.crossplane.io,functions.pkg.crossplane.io --output json | jq -er '.items | if length > 0 and all(any(.status.conditions[]?; .type == "Healthy" and .status == "True")) then "crossplane  ok  \(map(select(.kind == "Provider")) | length) providers and \(map(select(.kind == "Function")) | length) functions healthy (kubectl get providers,functions)" else error("some Crossplane packages are not healthy: kubectl get providers,functions") end'
     @curl -fsS http://hello.staging.localhost/api/info | jq -r '"hello       ok  \(.version) in staging, http://hello.staging.localhost"'
     @curl -fsS http://hello.localhost/api/info | jq -r '"hello       ok  \(.version) in production, http://hello.localhost"'
 

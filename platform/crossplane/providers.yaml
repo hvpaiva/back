@@ -1,0 +1,32 @@
+# AWS providers built by crossplane-contrib (Upbound's builds are free only at
+# the latest version). The family provider is the S3 provider's dependency,
+# declared here so that its version is pinned too.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-family-aws
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/provider-family-aws:v2.7.0
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-s3
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/provider-aws-s3:v2.7.0
+  skipDependencyResolution: true
+---
+# The managed resource types Crossplane serves; the S3 provider alone ships 50.
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: ManagedResourceActivationPolicy
+metadata:
+  name: platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  activate:
+    - buckets.s3.aws.m.upbound.io

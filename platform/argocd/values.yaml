@@ -12,6 +12,20 @@ configs:
     timeout.reconciliation: 60s
     timeout.reconciliation.jitter: 10s
     ui.bannercontent: "BACK lab"
+    # Argo CD's built-in check calls a Crossplane provider Degraded while its pod
+    # starts, and a Degraded resource fails the sync that is installing it.
+    resource.customizations.health.pkg.crossplane.io_Provider: |
+      local installed, healthy = false, false
+      local message = "Waiting for the provider to be installed"
+      for _, c in ipairs(obj.status and obj.status.conditions or {}) do
+        if c.type == "Installed" then installed = c.status == "True" end
+        if c.type == "Healthy" then healthy = c.status == "True" end
+        if c.status ~= "True" then message = c.message ~= "" and c.message or c.reason end
+      end
+      if installed and healthy then
+        return {status = "Healthy"}
+      end
+      return {status = "Progressing", message = message}
   params:
     # Traefik serves the lab over plain HTTP, so the server doesn't use TLS.
     server.insecure: true

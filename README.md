@@ -7,7 +7,7 @@ A local lab that shows how Backstage, Argo CD, Crossplane and Kyverno fit togeth
 
 Everything runs on your machine, in a kind cluster, with LocalStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
 
-> Work in progress: Argo CD and the delivery path for services are in place; Crossplane, Kyverno and Backstage are being added.
+> Work in progress: Argo CD and the delivery path for services are in place, and Crossplane is installed; the platform's APIs, Kyverno and Backstage are being added.
 
 ## What this is, and what it isn't
 
@@ -30,7 +30,7 @@ Two perspectives on the same cluster.
 
 ### The platform behind it
 
-Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where.
+Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane runs alongside, with an AWS provider that manages resources in LocalStack.
 
 ```mermaid
 flowchart LR
@@ -38,9 +38,11 @@ flowchart LR
     hello -- "CI: test, build" --> ghcr[(ghcr.io)]
     hello -. "CI commits the new image<br/>to values-staging.yaml" .-> hello
     argocd[Argo CD] -- reads --> hello
-    argocd -- "reads the platform's chart" --> back["back<br/>charts/app"]
-    argocd -- applies --> cluster["kind cluster<br/>hello-staging, hello-production"]
+    argocd -- "reads the platform" --> back["back<br/>platform/ + charts/app"]
+    argocd -- applies --> cluster["kind cluster<br/>hello-staging<br/>hello-production"]
     cluster -- pulls --> ghcr
+    argocd -- installs --> crossplane[Crossplane]
+    crossplane -- "AWS provider" --> localstack[(LocalStack)]
 ```
 
 ## Run it
@@ -61,9 +63,10 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 | Headlamp | http://headlamp.localhost (token from `just headlamp-token`) |
 | hello | http://hello.staging.localhost and http://hello.localhost |
 | Traefik | http://traefik.localhost/dashboard/ |
-| LocalStack | http://localhost:4566 |
+| LocalStack | http://localhost:4566 (`aws s3 ls` from this directory lists its buckets) |
+| Crossplane | No UI of its own: the `crossplane` Application in Argo CD, or `kubectl get providers,functions` |
 
-`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 2 GB of RAM and 5 GB of disk.
+`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 3.5 GB of RAM and 8 GB of disk.
 
 Run this way, the lab follows the repositories above on GitHub. Everything works and you can inspect all of it, but you can't change what it deploys: Argo CD reads GitHub, not your disk.
 
@@ -100,11 +103,11 @@ Argo CD can report each deployment back to GitHub: the deployed commit gets an `
 
 In this repository:
 
-- `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account. `just` installs it.
-- `platform/` is everything Argo CD delivers, starting with Argo CD itself. `platform/root.yaml` is the only thing applied by hand.
+- `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account (LocalStack). `just` installs it.
+- `platform/` is everything Argo CD delivers. `platform/root.yaml`, the only thing applied by hand, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages and its connection to LocalStack.
 - `charts/app/` is the golden path for services. `.github/workflows/` holds the workflows services' CI calls: `go.yaml` checks Go services, `delivery.yaml` validates and ships any service.
 - `docs/` explains [how it works](docs/how-it-works.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
 
 ## Isolation
 
-Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at the lab cluster only, and keeps their credentials in git-ignored folders here rather than in your home directory. AWS calls go to LocalStack with dummy credentials, even if real AWS profiles are configured. Host ports are bound to 127.0.0.1, so nothing is reachable from your network.
+Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at the lab cluster only, and keeps their credentials in git-ignored folders here rather than in your home directory. AWS calls go to LocalStack with dummy credentials, even if real AWS profiles are configured, and so do those of Crossplane's AWS provider in the cluster. Host ports are bound to 127.0.0.1, so nothing is reachable from your network.

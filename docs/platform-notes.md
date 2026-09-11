@@ -58,6 +58,18 @@ With code and configuration in the same branch, one change reaches staging as tw
 
 The service's CI commits the new image to its own repository. Commits pushed with the workflow's built-in token don't start new workflow runs, which is what keeps that from looping.
 
+## A starting provider fails the sync that installs it
+
+Argo CD's built-in health check for Crossplane providers reports *Degraded* while the provider's pod starts, and a *Degraded* resource fails the sync in progress. The first install got through only on Argo CD's automatic retries (five by default), which a slow image pull can run out of. `platform/argocd/values.yaml` replaces that check with one that stays *Progressing* until the provider is installed and healthy.
+
+## An endpoint override only covers the services it lists
+
+The AWS provider sends a service's calls to a custom endpoint only if that service is in the ProviderConfig's `endpoint.services`. With the list empty, the lab's first test bucket went to AWS itself, which rejected the dummy key. `platform/crossplane/localstack.yaml` lists `s3` and `s3control`, and any AWS service the platform starts using has to be added there first.
+
+## S3 needs S3 Control, and S3 Control needs wildcard DNS
+
+To read a bucket's tags, the provider calls S3 Control at `<account-id>.<endpoint>`, and it always has an account ID (`000000000000` with LocalStack). AWS has DNS for those names; the cluster didn't, so the bucket never became ready. `cluster/coredns.yaml` adds a CoreDNS rule that answers `<account-id>.localstack.localstack.svc` with LocalStack's Service.
+
 ## The argocd CLI and Traefik
 
 Before logging in, `argocd login` probes the server for TLS. Traefik answers that probe with its default certificate, even on port 80, and the CLI then stops to ask whether to proceed. `just argocd-login` skips the probe (`--skip-test-tls`), and `ARGOCD_OPTS` in `mise.toml` sets `--grpc-web --plaintext` for every command.

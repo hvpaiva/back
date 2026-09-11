@@ -22,6 +22,14 @@ Why the lab is built the way it is. Most of these trade realism for something th
 - A Helm chart as the golden path. Helm is how many teams already package their services. Here the platform maintains one chart, and each service only declares what it needs, much like a CircleCI orb.
 - Services in public GitHub repositories on a personal account. Argo CD reads them without credentials, and no company system is involved.
 
+## Crossplane
+
+- Crossplane v2, with namespaced managed resources. What a service requests, and what that creates, lives in the service's namespace.
+- AWS providers built by crossplane-contrib. Upbound publishes the same providers, but only their latest version is free; contrib's builds are Apache 2.0 and every version stays available.
+- Only the resource types the platform uses are activated. The S3 provider alone ships 50, and each active one is a CRD the API server and Argo CD keep track of. With so few, the lab doesn't need the higher Argo CD API rate limit that Crossplane's Argo CD guide recommends.
+- Every package pinned in Git, dependencies included. The family provider is declared rather than left to Crossplane's dependency resolution, which would install whatever version it finds.
+- Compositions in Go templates (function-go-templating). They read like the Helm templates of the platform's chart.
+
 ## Tooling
 
 - just. Readable recipes, pinned by mise like the rest of the toolchain.

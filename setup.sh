@@ -187,7 +187,7 @@ if [[ -z $ram_gib ]]; then
 elif ((ram_gib >= min_ram_gib)); then
   ok "$ram_gib GiB of RAM"
 else
-  warn "$ram_gib GiB of RAM: the lab uses about 2 GiB and grows as components are added ($min_ram_gib GiB recommended)"
+  warn "$ram_gib GiB of RAM: the lab uses about 3.5 GiB and grows as components are added ($min_ram_gib GiB recommended)"
 fi
 
 docker_dir=/var/lib/docker
@@ -199,7 +199,7 @@ if [[ -z $free_gib ]]; then
 elif ((free_gib >= min_disk_gib)); then
   ok "$free_gib GiB free for Docker"
 else
-  warn "$free_gib GiB free for Docker: the lab uses about 5 GiB and grows as components are added ($min_disk_gib GiB recommended)"
+  warn "$free_gib GiB free for Docker: the lab uses about 8 GiB and grows as components are added ($min_disk_gib GiB recommended)"
 fi
 
 # --- Ports -------------------------------------------------------------------

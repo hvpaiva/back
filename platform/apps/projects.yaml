@@ -18,6 +18,7 @@ spec:
     - https://github.com/hvpaiva/back.git
     - https://argoproj.github.io/argo-helm
     - https://kubernetes-sigs.github.io/headlamp/
+    - https://charts.crossplane.io/stable
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"

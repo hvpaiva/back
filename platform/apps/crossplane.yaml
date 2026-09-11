@@ -1,0 +1,33 @@
+# Crossplane, plus its functions, the AWS provider and the provider's connection
+# to LocalStack (platform/crossplane/). Those objects sync in waves 1 and 2,
+# once the kinds they use exist.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: crossplane
+  namespace: argocd
+spec:
+  project: platform
+  sources:
+    - repoURL: https://charts.crossplane.io/stable
+      chart: crossplane
+      targetRevision: 2.4.0
+      helm:
+        valuesObject:
+          provider:
+            # Activations are declared in platform/crossplane/providers.yaml.
+            defaultActivations: []
+    - repoURL: https://github.com/hvpaiva/back.git
+      targetRevision: main
+      path: platform/crossplane
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: crossplane-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # On the first sync, the kinds in waves 1 and 2 don't exist yet.
+      - SkipDryRunOnMissingResource=true
