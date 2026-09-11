@@ -1,0 +1,189 @@
+# The platform's delivery workflow for services, the GitHub Actions version of
+# a CircleCI orb: each service's CI runs its own tests and then calls this
+# workflow, which does the same thing for every service.
+#
+#   pull requests  check charts/<service>/ against the platform's chart
+#   staging        build the image and deploy it to staging
+#   main           promote the image staging runs to production
+#
+# CI never talks to the cluster: deploying is committing the image to the
+# stage's values file, and Argo CD takes it from there. A caller must grant
+# `contents: write` and `packages: write`; see back-hello's CI for an example.
+name: service
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: The folder under charts/ that describes the service
+        type: string
+        required: true
+      platform-repository:
+        description: Where the platform's chart lives
+        type: string
+        default: hvpaiva/back
+      platform-ref:
+        description: The platform version to validate against (what Argo CD deploys with)
+        type: string
+        default: main
+
+permissions: {}
+
+env:
+  CHART_DIR: charts/${{ inputs.service }}
+  SERVICE: ${{ inputs.service }}
+
+jobs:
+  # Renders the service's values with the platform's chart for each stage, so
+  # a typo or a missing field fails here, in the pull request, instead of at
+  # sync time (or worse, stopping the ApplicationSet for every service).
+  validate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.platform-repository }}
+          ref: ${{ inputs.platform-ref }}
+          path: .platform
+          persist-credentials: false
+      - name: Render the chart for each stage
+        run: |
+          status=0
+          for stage in staging production; do
+            args=(--values "$CHART_DIR/values.yaml")
+            if [[ -f $CHART_DIR/values-$stage.yaml ]]; then
+              args+=(--values "$CHART_DIR/values-$stage.yaml")
+            fi
+            if errors=$(helm template "$SERVICE" .platform/charts/app "${args[@]}" --set "platform.stage=$stage" 2>&1 >/dev/null); then
+              echo "$stage: ok"
+            else
+              status=1
+              printf '%s: %s\n' "$stage" "$errors" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          exit $status
+
+  # Decides what a push to a stage branch needs.
+  #   staging: a new image, unless the push only touched charts/ (the deploy
+  #            configuration), which Argo CD applies as it is.
+  #   main:    a promotion, only if the push changed the image staging runs,
+  #            as merging staging does. Reverting a promotion doesn't.
+  plan:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      promote: ${{ steps.plan.outputs.promote }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: plan
+        env:
+          BEFORE: ${{ github.event.before }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          build=false
+          promote=false
+          known=false
+          if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then known=true; fi
+          if [[ $BRANCH == staging ]]; then
+            if ! $known || git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qv '^charts/'; then
+              build=true
+            fi
+          elif [[ $BRANCH == main ]]; then
+            now=$(yq '.image' "$CHART_DIR/values-staging.yaml")
+            before=none
+            if $known; then before=$(git show "$BEFORE:$CHART_DIR/values-staging.yaml" | yq '.image'); fi
+            if [[ $now != "$before" ]]; then promote=true; fi
+          fi
+          echo "build=$build promote=$promote"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "promote=$promote" >> "$GITHUB_OUTPUT"
+
+  staging:
+    needs: [validate, plan]
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    concurrency:
+      group: deploy-staging-${{ github.repository }}
+      cancel-in-progress: false
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Pick the image tag
+        id: tag
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          build-args: VERSION=${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Commits pushed with the workflow's own token don't start new runs.
+      - name: Deploy to staging
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          yq -i '.image = strenv(IMAGE) + ":" + strenv(TAG)' "$CHART_DIR/values-staging.yaml"
+          if git diff --quiet; then
+            echo "staging already runs $TAG"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore($SERVICE): deploy $TAG to staging"
+          git pull --rebase origin staging
+          git push origin HEAD:staging
+
+  production:
+    needs: [validate, plan]
+    if: needs.plan.outputs.promote == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: deploy-production-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Production runs exactly the image that ran in staging: nothing is rebuilt.
+      - name: Promote the image staging ran
+        run: |
+          IMAGE=$(yq '.image' "$CHART_DIR/values-staging.yaml")
+          export IMAGE
+          yq -i '.image = strenv(IMAGE)' "$CHART_DIR/values-production.yaml"
+          if git diff --quiet; then
+            echo "production already runs $IMAGE"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore($SERVICE): promote ${IMAGE##*:} to production"
+          git pull --rebase origin main
+          git push origin HEAD:main
