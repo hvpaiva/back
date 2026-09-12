@@ -43,6 +43,24 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # What the service asked for, as the platform resolved it. A service
+            # can show these, so editing its values.yaml is visible from outside.
+            - name: APP_SIZE
+              value: {{ .Values.size | quote }}
+            - name: APP_REPLICAS
+              value: {{ $size.replicas | quote }}
+            - name: APP_CPU
+              value: {{ $size.cpu | quote }}
+            - name: APP_MEMORY
+              value: {{ $size.memory | quote }}
+            - name: APP_MEMORY_LIMIT
+              value: {{ $size.memoryLimit | quote }}
+            - name: APP_PUBLIC
+              value: {{ .Values.public | quote }}
+            {{- if kindIs "map" .Values.bucket }}
+            - name: BUCKET_VERSIONING
+              value: {{ .Values.bucket.versioning | default false | quote }}
+            {{- end }}
           {{- if kindIs "map" .Values.bucket }}
           envFrom:
             - secretRef:
