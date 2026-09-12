@@ -3,7 +3,7 @@
   <h1>BACK lab</h1>
 </div>
 
-A local lab that shows how Backstage, Argo CD, Crossplane and Kyverno fit together as an internal developer platform: what a developer does to ship a service, what the platform team builds so that it takes so little, and what happens in between.
+A local lab where Backstage, Argo CD, Crossplane and Kyverno are already wired together as an internal developer platform: ship a service the way a developer would, and change the APIs, the chart and the pipelines that made it that easy.
 
 Everything runs on your machine, in a kind cluster, with LocalStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
 
@@ -17,7 +17,39 @@ What carries over to a real platform is the shape of it: the contracts between t
 
 It isn't a course either. It doesn't teach each tool from scratch; their own documentation does that better.
 
-## What you'll see
+## Using it, and changing it
+
+Two halves, and they want different things. Using the platform is Argo CD, the services and the requests: `kubectl apply -f platform/apis/queue/example.yaml` asks for a queue the way a service would, and `crossplane resource trace queues.back.lab emails -n hello-staging` shows what the platform made of it. Changing the platform is the other half: `just render cache` prints what a request would create, in a second and without the cluster, `just diff apis` says what applying the folder you're editing would change, and `just local apis` applies it instead of what Git says, until `just gitops` hands it back.
+
+[Things to try](docs/experiments.md) walks both and says what you should see, and [when something doesn't work](docs/troubleshooting.md) is the order to look in. Both assume the lab is running, which is the next section.
+
+## Run it
+
+Tested on Ubuntu 24.04, where `setup.sh` also installs what's missing. On other systems it runs the same checks and tells you what to install.
+
+```sh
+git clone https://github.com/hvpaiva/back.git && cd back
+./setup.sh   # checks this machine and offers to install what's missing, asking first
+just up      # creates the cluster and waits until everything is healthy (a few minutes)
+```
+
+`setup.sh` checks Docker, free ports (80, 443, 4566), RAM, disk and the tools pinned in `mise.toml`, and can add a line to your shell rc that activates [mise](https://mise.jdx.dev). If mise isn't active in your shell, prefix commands with `mise exec --`, as in `mise exec -- just up`.
+
+| What | Where |
+|---|---|
+| Argo CD | http://argocd.localhost (user `dev` or `platform-admin`, password from `just argocd-password <user>`) |
+| kubectl | From this directory: `kubectl --context dev` or `--context platform-admin` |
+| Headlamp | http://headlamp.localhost (token from `just headlamp-token`) |
+| hello | http://hello.staging.localhost and http://hello.localhost |
+| Traefik | http://traefik.localhost/dashboard/ |
+| LocalStack | http://localhost:4566 (`aws s3 ls` from this directory lists its buckets) |
+| Crossplane | No UI of its own: the `crossplane` Application in Argo CD, or `kubectl get providers,functions` |
+
+`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 4 GB of RAM and 8 GB of disk.
+
+Run this way, the lab follows the repositories above on GitHub: everything works and you can inspect all of it. Argo CD reads GitHub rather than your disk, so changing what it deploys means either handing one folder to your working copy with `just local`, or running from your own forks, further down.
+
+## What's already here
 
 Two perspectives on the same cluster, each with an identity to see it through: `dev`, a developer in `team-a`, and `platform-admin`.
 
@@ -47,37 +79,7 @@ flowchart LR
     crossplane -- "creates it" --> localstack[(LocalStack)]
 ```
 
-## Run it
-
-Tested on Ubuntu 24.04, where `setup.sh` also installs what's missing. On other systems it runs the same checks and tells you what to install.
-
-```sh
-git clone https://github.com/hvpaiva/back.git && cd back
-./setup.sh   # checks this machine and offers to install what's missing, asking first
-just up      # creates the cluster and waits until everything is healthy (a few minutes)
-```
-
-`setup.sh` checks Docker, free ports (80, 443, 4566), RAM, disk and the tools pinned in `mise.toml`, and can add a line to your shell rc that activates [mise](https://mise.jdx.dev). If mise isn't active in your shell, prefix commands with `mise exec --`, as in `mise exec -- just up`.
-
-| What | Where |
-|---|---|
-| Argo CD | http://argocd.localhost (user `dev` or `platform-admin`, password from `just argocd-password <user>`) |
-| kubectl | From this directory: `kubectl --context dev` or `--context platform-admin` |
-| Headlamp | http://headlamp.localhost (token from `just headlamp-token`) |
-| hello | http://hello.staging.localhost and http://hello.localhost |
-| Traefik | http://traefik.localhost/dashboard/ |
-| LocalStack | http://localhost:4566 (`aws s3 ls` from this directory lists its buckets) |
-| Crossplane | No UI of its own: the `crossplane` Application in Argo CD, or `kubectl get providers,functions` |
-
-`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 4 GB of RAM and 8 GB of disk.
-
-Run this way, the lab follows the repositories above on GitHub: everything works and you can inspect all of it. Argo CD reads GitHub rather than your disk, so changing the platform means either handing one piece to your working copy for a while, below, or running from your own forks.
-
-## Once it's running
-
-There are two ways around the lab, and they want different things. Using the platform is Argo CD, the services and the requests: `kubectl apply -f platform/apis/queue/example.yaml` asks for a queue the way a service would, and `crossplane resource trace queues.back.lab emails -n hello-staging` shows what the platform made of it. Changing the platform is the other half: `just render cache` prints what a request would create, in a second and without the cluster, `just diff apis` says what applying the folder you're editing would change, and `just local apis` applies it instead of what Git says, until `just gitops` hands it back.
-
-[Things to try](docs/experiments.md) walks both, and [when something doesn't work](docs/troubleshooting.md) is where to look when one of them doesn't.
+[How it works](docs/how-it-works.md) follows both sides in detail, from the push to the running pods.
 
 ## Run it from your own GitHub
 
@@ -113,7 +115,7 @@ Argo CD can report each deployment back to GitHub: the deployed commit gets an `
 In this repository:
 
 - `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account (LocalStack). `just` installs it.
-- `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, CloudNativePG, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages, its permissions and its connection to LocalStack; `platform/apis/` holds the APIs services request resources through; `platform/rbac/` says what each team can see.
+- `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, CloudNativePG, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages, its permissions and its connection to LocalStack; `platform/apis/` holds the APIs services request resources through, each with the example request `just render` and `kubectl apply` take; `platform/rbac/` says what each team can see.
 - `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls: `go.yaml` checks Go services, `delivery.yaml` validates and ships any service.
 - `scripts/` holds what the longer `just` recipes run.
 - `docs/` explains [how it works](docs/how-it-works.md), suggests [things to try](docs/experiments.md), gives the order to look in [when something doesn't work](docs/troubleshooting.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
