@@ -1,0 +1,8 @@
+# A request, to render the Composition against (`just render cache`) or to apply as it is.
+apiVersion: back.lab/v1alpha1
+kind: Cache
+metadata:
+  name: sessions
+  namespace: hello-staging
+spec:
+  size: small

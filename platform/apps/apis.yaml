@@ -13,6 +13,8 @@ spec:
     path: platform/apis
     directory:
       recurse: true
+      # Each API ships an example request, for rendering and for trying it out by hand.
+      exclude: "**/example.yaml"
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:

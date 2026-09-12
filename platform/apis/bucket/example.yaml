@@ -1,0 +1,9 @@
+# A request, to render the Composition against (`just render bucket`) or to apply as it is.
+# Services ask for a bucket through the chart instead, with `bucket:` in their values.
+apiVersion: back.lab/v1alpha1
+kind: Bucket
+metadata:
+  name: reports
+  namespace: hello-staging
+spec:
+  versioning: true

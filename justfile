@@ -82,6 +82,18 @@ headlamp-token:
 use-fork owner:
     @scripts/use-fork.sh {{owner}}
 
+# Render one of the platform's APIs against its example request and check it against the schemas
+render api *flags:
+    @scripts/render.sh {{api}} {{flags}}
+
+# Apply one Application from this working copy instead of from Git (pauses Argo CD for it)
+local app:
+    @scripts/local.sh {{app}}
+
+# Put every Application back under Git
+gitops:
+    @scripts/local.sh gitops
+
 # Smoke-test the lab from the host
 check:
     @scripts/check.sh

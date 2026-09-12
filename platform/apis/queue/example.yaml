@@ -1,0 +1,8 @@
+# A request, to render the Composition against (`just render queue`) or to apply as it is.
+apiVersion: back.lab/v1alpha1
+kind: Queue
+metadata:
+  name: emails
+  namespace: hello-staging
+spec:
+  visibilityTimeoutSeconds: 60
