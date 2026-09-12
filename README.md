@@ -71,11 +71,11 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 
 `just` lists every recipe, and `just down` deletes the cluster. The lab uses about 4 GB of RAM and 8 GB of disk.
 
-Run this way, the lab follows the repositories above on GitHub. Everything works and you can inspect all of it, but you can't change what it deploys: Argo CD reads GitHub, not your disk.
+Run this way, the lab follows the repositories above on GitHub: everything works and you can inspect all of it. Argo CD reads GitHub rather than your disk, so changing the platform means either handing one piece to your working copy for a while, below, or running from your own forks.
 
 ## Once it's running
 
-There are two ways around the lab, and they want different things. Using the platform is Argo CD, the services and the requests: `kubectl apply -f platform/apis/queue/example.yaml` asks for a queue the way a service would, and `crossplane resource trace queues.back.lab emails -n hello-staging` shows what the platform made of it. Changing the platform is the other half: `just render cache` prints what a request would create, in a second and without the cluster, and `just local apis` applies the folder you're editing instead of what Git says, until `just gitops` hands it back.
+There are two ways around the lab, and they want different things. Using the platform is Argo CD, the services and the requests: `kubectl apply -f platform/apis/queue/example.yaml` asks for a queue the way a service would, and `crossplane resource trace queues.back.lab emails -n hello-staging` shows what the platform made of it. Changing the platform is the other half: `just render cache` prints what a request would create, in a second and without the cluster, `just diff apis` says what applying the folder you're editing would change, and `just local apis` applies it instead of what Git says, until `just gitops` hands it back.
 
 [Things to try](docs/experiments.md) walks both, and [when something doesn't work](docs/troubleshooting.md) is where to look when one of them doesn't.
 

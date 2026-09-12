@@ -58,6 +58,7 @@ Then the loop, which doesn't go through Git:
 
 ```sh
 just render cache                                  # what it would create, checked against the schemas
+just diff apis                                     # what applying the folder would change in the cluster
 just local apis                                    # apply platform/apis/ from here, not from Git
 kubectl apply -f platform/apis/cache/example.yaml
 kubectl -n hello-staging get pods -l app.kubernetes.io/name=sessions-cache
@@ -100,3 +101,9 @@ Most of what goes wrong here has that shape, one handoff at a time:
 Git, so this one goes through your own forks (see the README). Change what `small` means in
 `charts/app/templates/_helpers.tpl`, push, and both stages of hello roll with it, without a single
 service repository changing.
+
+A fork is also how to watch the platform refuse to throw data away. Take `bucket:` out of hello's
+`values.yaml` and push: the chart stops rendering the request, and Argo CD leaves it standing and
+says so, marking the Application OutOfSync with the request needing pruning. The bucket is still in
+LocalStack, and putting the line back adopts it again. That's `Prune=false,Delete=false` on the
+request, in `charts/app/templates/bucket.yaml`.

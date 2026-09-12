@@ -86,9 +86,13 @@ use-fork owner:
 render api *flags:
     @scripts/render.sh {{api}} {{flags}}
 
+# Show what this working copy would change in one Application, without applying it
+diff app:
+    @scripts/local.sh diff {{app}}
+
 # Apply one Application from this working copy instead of from Git (pauses Argo CD for it)
 local app:
-    @scripts/local.sh {{app}}
+    @scripts/local.sh apply {{app}}
 
 # Put every Application back under Git
 gitops:

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Hands one Application to this working copy, and hands everything back (just local <app>,
+# What this working copy would change, and running it instead of Git (just diff, just local,
 # just gitops). Argo CD enforces Git, and root enforces the Applications' own spec, so taking one
 # over means pausing both: otherwise root undoes it within a minute.
 #
-#   scripts/local.sh apis      apply platform/apis from here, as it is on disk
-#   scripts/local.sh gitops    put every Application back under Git
+#   scripts/local.sh diff apis     what applying platform/apis/ from here would change
+#   scripts/local.sh apply apis    apply it, and stop Argo CD from putting Git back
+#   scripts/local.sh gitops        put every Application back under Git
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
@@ -17,10 +18,45 @@ login() {
       --output jsonpath='{.data.platform-admin}' | base64 --decode)" >/dev/null
 }
 
+# The folder of this repository an Application delivers. Messages go to stderr: the caller reads stdout.
+source_path() { # app
+  local path
+  if ! path=$(kubectl --namespace argocd get application "$1" --output jsonpath='{.spec.source.path}' 2>/dev/null); then
+    { fail "no Application named $1"; hint "kubectl --namespace argocd get applications"; } >&2
+    return 1
+  fi
+  if [[ -z $path || ! -d $path ]]; then
+    { fail "$1 doesn't come from a folder of this repository"
+      hint "it's installed from a Helm repository: change platform/apps/$1.yaml and push instead"; } >&2
+    return 1
+  fi
+  echo "$path"
+}
+
+usage() { # command
+  echo "usage: $(basename "$0") ${1:-diff|apply} <app>" >&2
+  exit 2
+}
+
 case ${1:-} in
-  "")
-    echo "usage: $(basename "$0") <app>|gitops" >&2
-    exit 2
+  diff)
+    [[ -n ${2:-} ]] || usage diff
+    path=$(source_path "$2")
+    login
+    section "What $path would change in the cluster"
+    # A difference is the expected answer here, and the CLI exits non-zero for it.
+    argocd app diff "$2" --local "$path" --exit-code=false
+    ;;
+  apply)
+    [[ -n ${2:-} ]] || usage apply
+    path=$(source_path "$2")
+    section "Syncing $2 from $path"
+    login
+    argocd app set root --sync-policy manual >/dev/null
+    argocd app set "$2" --sync-policy manual >/dev/null
+    argocd app sync "$2" --local "$path"
+    ok "$2 runs what's in $path, and stays OutOfSync against Git until you push it"
+    hint "just gitops puts it back"
     ;;
   gitops)
     section "Back under Git"
@@ -33,23 +69,7 @@ case ${1:-} in
     hint "anything you applied from disk that Git doesn't have stays until you delete it"
     ;;
   *)
-    app=$1
-    if ! path=$(kubectl --namespace argocd get application "$app" --output jsonpath='{.spec.source.path}' 2>/dev/null); then
-      fail "no Application named $app"
-      hint "kubectl --namespace argocd get applications"
-      exit 1
-    fi
-    if [[ -z $path || ! -d $path ]]; then
-      fail "$app doesn't come from a folder of this repository"
-      hint "it's installed from a Helm repository: change platform/apps/$app.yaml and push instead"
-      exit 1
-    fi
-    section "Syncing $app from $path"
-    login
-    argocd app set root --sync-policy manual >/dev/null
-    argocd app set "$app" --sync-policy manual >/dev/null
-    argocd app sync "$app" --local "$path"
-    ok "$app runs what's in $path, and stays OutOfSync against Git until you push it"
-    hint "just gitops puts it back"
+    echo "usage: $(basename "$0") diff <app> | apply <app> | gitops" >&2
+    exit 2
     ;;
 esac
