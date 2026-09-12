@@ -26,8 +26,9 @@ case ${1:-} in
     section "Back under Git"
     login
     argocd app set root --sync-policy automated --self-heal --auto-prune >/dev/null
-    # root re-applies the Applications it manages, which restores their sync policy too.
-    argocd app sync root >/dev/null
+    # Syncing root restores the Applications it manages, sync policy included, right away. It
+    # refuses while an operation of its own is still running, and that's fine: self-heal gets there.
+    argocd app sync root >/dev/null 2>&1 || true
     ok "root follows Git again, and the Applications it manages follow within a minute"
     hint "anything you applied from disk that Git doesn't have stays until you delete it"
     ;;

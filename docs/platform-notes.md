@@ -46,6 +46,13 @@ it with the cluster. That command and `just local` read the folder from disk but
 own settings from the cluster, so a change to the Application itself, this exclusion included, only
 counts once it's pushed.
 
+On a cluster that was already running, the commit that added both the examples and the exclusion
+applied them in that order. Two Applications are involved, root for the `apis` Application and
+`apis` for the folder, and `apis` synced the new files before root handed it the exclusion. The
+four requests it created then stayed, because the APIs are never pruned, until they were deleted by
+hand. A cluster built after that commit never sees it: the Application is created with the
+exclusion already in it.
+
 ## Letting teams create their namespaces
 
 Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.
