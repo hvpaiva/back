@@ -83,7 +83,7 @@ Services call them at `main`, so a fix reaches all of them at once.
 | `Table` | a DynamoDB table with the keys asked for, billed per request |
 | `Cache` | a Valkey server in the namespace, Redis-compatible, with a memory cap and a password of its own |
 
-Each one also composes the Secret the service reads its connection from: `<name>-bucket`, `<name>-queue`, `<name>-table`, `<name>-cache`. Only `Bucket` is wired into the chart so far, with `bucket:` in a service's values; the others are requested by applying a `Queue`, a `Table` or a `Cache` to a namespace. `kubectl get buckets.back.lab -A` lists the requests; `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became.
+Each one also composes the Secret the service reads its connection from: `<name>-bucket`, `<name>-queue`, `<name>-table`, `<name>-cache`. Only `Bucket` is wired into the chart so far, with `bucket:` in a service's values; the others are requested by applying a `Queue`, a `Table` or a `Cache` to a namespace. `kubectl get buckets.back.lab -A` lists the requests; `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became, and [when something doesn't work](troubleshooting.md) follows that chain to the end.
 
 ### Who can do what
 

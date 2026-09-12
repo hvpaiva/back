@@ -18,19 +18,28 @@ login() {
       --output jsonpath='{.data.platform-admin}' | base64 --decode)" >/dev/null
 }
 
-# The folder of this repository an Application delivers. Messages go to stderr: the caller reads stdout.
+# The folder of this repository an Application delivers, when Argo CD can sync it from disk at all:
+# that takes one source pointing at a path here. Messages go to stderr: the caller reads stdout.
 source_path() { # app
-  local path
-  if ! path=$(kubectl --namespace argocd get application "$1" --output jsonpath='{.spec.source.path}' 2>/dev/null); then
-    { fail "no Application named $1"; hint "kubectl --namespace argocd get applications"; } >&2
+  local app=$1 application path
+  if ! application=$(kubectl --namespace argocd get application "$app" --output json 2>/dev/null); then
+    { fail "no Application named $app"; hint "kubectl --namespace argocd get applications"; } >&2
     return 1
   fi
-  if [[ -z $path || ! -d $path ]]; then
-    { fail "$1 doesn't come from a folder of this repository"
-      hint "it's installed from a Helm repository: change platform/apps/$1.yaml and push instead"; } >&2
-    return 1
+  path=$(jq -r 'if ((.spec.sources // []) | length) > 0 then "" else .spec.source.path // "" end' <<<"$application")
+  if [[ -n $path && -d $path ]]; then
+    echo "$path"
+    return 0
   fi
-  echo "$path"
+  if [[ $(jq -r '.spec.project' <<<"$application") == apps ]]; then
+    { fail "$app is a service, and Argo CD syncs only single-source Applications from disk"
+      hint "it reads charts/app and the service's own values from two repositories, and a local sync would render the chart without them"
+      hint "change them and push; just render-service renders a service here first, for every stage"; } >&2
+  else
+    { fail "$app doesn't come from a folder of this repository"
+      hint "it's installed from a Helm chart: change platform/apps/$app.yaml, or the values beside it, and push"; } >&2
+  fi
+  return 1
 }
 
 usage() { # command

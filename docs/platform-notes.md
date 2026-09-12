@@ -53,6 +53,17 @@ four requests it created then stayed, because the APIs are never pruned, until t
 hand. A cluster built after that commit never sees it: the Application is created with the
 exclusion already in it.
 
+## A local sync sees one source only
+
+`argocd app sync --local` and `argocd app diff --local` read the folder you point at and nothing
+else, so an Application with two sources loses the other one, without saying so. Asked to diff a
+service against `charts/app`, Argo CD ran `helm template` with no values at all and stopped at the
+chart's own schema, complaining that `application.name` was empty; asked to diff the Argo CD
+Application against `platform/argocd`, it went looking for a `Chart.yaml` that was never there.
+Only an Application with a single source pointing at a folder of this repository can be synced from
+disk, which here means `apis`, `rbac` and `root`. Everything else changes by pushing, and
+`just local` says which it is.
+
 ## Letting teams create their namespaces
 
 Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.

@@ -19,9 +19,19 @@ It isn't a course either. It doesn't teach each tool from scratch; their own doc
 
 ## Using it, and changing it
 
-Two halves, and they want different things. Using the platform is Argo CD, the services and the requests: `kubectl apply -f platform/apis/queue/example.yaml` asks for a queue the way a service would, and `crossplane resource trace queues.back.lab emails -n hello-staging` shows what the platform made of it. Changing the platform is the other half: `just render cache` prints what a request would create, in a second and without the cluster, `just diff apis` says what applying the folder you're editing would change, and `just local apis` applies it instead of what Git says, until `just gitops` hands it back.
+Two halves, and they want different things from you. Both assume the lab is running, which is the next section.
 
-[Things to try](docs/experiments.md) walks both and says what you should see, and [when something doesn't work](docs/troubleshooting.md) is the order to look in. Both assume the lab is running, which is the next section.
+### Using the platform
+
+Argo CD, the services and what they asked for. `kubectl apply -f platform/apis/queue/example.yaml` asks for a queue the way a service would, `crossplane resource trace queues.back.lab emails -n hello-staging` shows what the platform made of it, and hello's page shows what it was given: its version, its size, and whether it reaches its bucket. As `dev`, you see the cluster the way a developer would, and you can't change it.
+
+### Changing the platform
+
+The loop, in the order you'd reach for it. `just render cache` prints what a request would create, in a second and without a cluster, and checks it against the schemas. `just render-service` does the same for a service through the platform's chart, for every stage, the way CI validates a pull request. `just diff apis` says what applying a folder would change in the cluster. `just local apis` applies it instead of what Git says, and `just gitops` hands it back.
+
+One thing doesn't bend: a change to `charts/app` reaches the cluster by push. Argo CD syncs only single-source Applications from disk, and a service's has two, the chart here and the service's own values. `just render-service` is the fast half of that loop, and your own forks, further down, are the other half.
+
+[Things to try](docs/experiments.md) walks both and says what you should see, and [when something doesn't work](docs/troubleshooting.md) is the order to look in.
 
 ## Run it
 

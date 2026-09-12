@@ -86,6 +86,10 @@ use-fork owner:
 render api *flags:
     @scripts/render.sh {{api}} {{flags}}
 
+# Render a service through the platform's chart for every stage, the way CI validates it
+render-service path="../back-hello/charts/hello":
+    @scripts/render-service.sh {{path}}
+
 # Show what this working copy would change in one Application, without applying it
 diff app:
     @scripts/local.sh diff {{app}}

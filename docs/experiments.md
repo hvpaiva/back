@@ -95,12 +95,26 @@ LocalStack lost its state and Crossplane creates the buckets again.
 Most of what goes wrong here has that shape, one handoff at a time:
 [when something doesn't work](troubleshooting.md).
 
+## Resize a service and watch it promote
+
+The developer's loop, and the first one that needs your own forks (see the README). In back-hello,
+set `size: medium` in `charts/hello/values-staging.yaml` and push. CI checks the values against the
+platform's chart before anything is built, Argo CD rolls staging out, and the page at
+http://hello.staging.localhost shows the new numbers itself: the platform hands every service its
+size, its replicas and its memory, and hello displays them. Then open a pull request from `staging`
+to `main` and merge it, and production runs the image staging ran, with production's values.
+
 ## Change the golden path for every service at once
 
 `charts/app` decides how every service is deployed, and each service's Application reads it from
-Git, so this one goes through your own forks (see the README). Change what `small` means in
+Git, so this one goes through your own forks too: Argo CD syncs only single-source Applications
+from disk, and a service's has two, the chart and its own values. Change what `small` means in
 `charts/app/templates/_helpers.tpl`, push, and both stages of hello roll with it, without a single
 service repository changing.
+
+`just render-service` is the fast half here. It renders a service through the chart for every
+stage, the same way the delivery workflow validates a pull request, and with the lab running it
+also puts each stage to the API server as a dry run.
 
 A fork is also how to watch the platform refuse to throw data away. Take `bucket:` out of hello's
 `values.yaml` and push: the chart stops rendering the request, and Argo CD leaves it standing and
