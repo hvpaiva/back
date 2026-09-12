@@ -1,5 +1,6 @@
 # What a service declares, in charts/<service>/values.yaml and values-<stage>.yaml
 # of its repository. values.schema.json rejects anything else.
+# `just render-service` renders a service through this chart, for every stage, before it's pushed.
 
 application:
   # Names its objects, its namespace and its address.

@@ -39,7 +39,8 @@ At no point does the developer (or CI) talk to the cluster. Git is the only inte
 
 ## Serving the developer (the platform's side)
 
-The platform team owns this repository.
+The platform team owns this repository. Everything below can be changed from a working copy and
+seen before it's pushed: [things to try](experiments.md) walks that loop.
 
 ### The base layer
 

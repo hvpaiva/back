@@ -27,7 +27,12 @@ Argo CD, the services and what they asked for. `kubectl apply -f platform/apis/q
 
 ### Changing the platform
 
-The loop, in the order you'd reach for it. `just render cache` prints what a request would create, in a second and without a cluster, and checks it against the schemas. `just render-service` does the same for a service through the platform's chart, for every stage, the way CI validates a pull request. `just diff apis` says what applying a folder would change in the cluster. `just local apis` applies it instead of what Git says, and `just gitops` hands it back.
+The loop, in the order you'd reach for it:
+
+- `just render <api>` takes one of the folders under `platform/apis/` (`bucket`, `queue`, `table`, `cache`) and prints what that request would create, in a second and without a cluster, checked against the schemas.
+- `just render-service [path]` does the same for a service through the platform's chart, for every stage, the way CI validates a pull request. Without an argument it renders `../back-hello/charts/hello`.
+- `just diff <app>` takes an Argo CD Application (`apis` delivers the APIs above; `kubectl -n argocd get applications` lists them all) and shows what applying its folder from here would change in the cluster.
+- `just local <app>` applies it instead of what Git says, and `just gitops` hands it back.
 
 One thing doesn't bend: a change to `charts/app` reaches the cluster by push. Argo CD syncs only single-source Applications from disk, and a service's has two, the chart here and the service's own values. `just render-service` is the fast half of that loop, and your own forks, further down, are the other half.
 
