@@ -36,6 +36,16 @@ The ApplicationSet that creates the services' Applications reads fields from eac
 
 `kubectl apply --dry-run=server` validates an Application against its schema, which catches a misspelled field. It doesn't check that the repository, branch or path it points to exists. Those errors appear later, as a condition on the Application in Argo CD.
 
+## An Application applies every file in its folder
+
+The `apis` Application syncs `platform/apis/` recursively, so the example request each API ships
+next to its Composition would be created in the cluster on the next sync, in whatever namespace it
+names. `directory.exclude` keeps them out. What a folder would apply is easy to check before
+pushing it: `argocd app diff <app> --local <path>` renders the folder as it is on disk and compares
+it with the cluster. That command and `just local` read the folder from disk but the Application's
+own settings from the cluster, so a change to the Application itself, this exclusion included, only
+counts once it's pushed.
+
 ## Letting teams create their namespaces
 
 Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.

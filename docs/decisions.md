@@ -1,14 +1,16 @@
 # Decisions
 
-Why the lab is built the way it is. Most of these trade realism for something that runs on one laptop.
+Why the lab is built the way it is. Most of these trade realism for something that runs on one
+laptop, and where the trade changes the answer, the entry says what a platform serving a company
+would do instead.
 
 ## Cluster and base layer
 
-- One kind node. Enough for the whole lab, and the lightest option.
+- One kind node. Enough for the whole lab, and the lightest option. A company would keep the platform's own components away from the workloads, on separate node pools or separate clusters, and would run Argo CD from outside the cluster it deploys to. One node hides all of that, along with everything that makes a platform highly available.
 - Kubernetes 1.35, not kind's default 1.37. A release Argo CD, Crossplane and Kyverno have had months to support.
 - Traefik as the ingress controller. It serves Ingress and Gateway API at the same time, so the platform can move services from one to the other without touching the cluster. ingress-nginx, the usual choice, reached end of life in March 2026.
 - Gateway API CRDs v1.6.1, installed before Traefik. The version Traefik 3.7 is built against; its chart doesn't ship them.
-- LocalStack 4.14.0, pinned by digest. The Community edition ended in March 2026: newer images need an account and an auth token, and the free plan is for non-commercial use only. 4.14.0 is the last Community release. It runs without a token, but it gets no updates or security patches, and it never included RDS. Its state lives in memory.
+- LocalStack 4.14.0, pinned by digest. The Community edition ended in March 2026: newer images need an account and an auth token, and the free plan is for non-commercial use only. 4.14.0 is the last Community release. It runs without a token, but it gets no updates or security patches, and it never included RDS. Its state lives in memory. A company would give each stage its own cloud account, with credentials the platform holds and the teams never see; here one emulator serves every namespace with the same dummy key.
 - Base layer installed by `just`, everything else by Argo CD. The base layer stands for what an infrastructure team provides. Everything a platform team would own is in Git.
 
 ## Delivery
@@ -21,7 +23,7 @@ Why the lab is built the way it is. Most of these trade realism for something th
 - The platform maintains the services' CI too: checks per language (`go.yaml` for now) and one delivery workflow for all. Services call them at `main`, the same trade-off as the chart: a fix reaches every service at once, and so does a mistake. A service that needs stability can pin a commit instead.
 - A Helm chart as the golden path. Helm is how many teams already package their services. Here the platform maintains one chart, and each service only declares what it needs, much like a CircleCI orb.
 - The platform provides the Dockerfile, one per language (`build/go.Dockerfile`). Services don't carry build details, and a base image or compiler update reaches all of them at once. A service with special needs can still pass its own.
-- Services in public GitHub repositories on a personal account. Argo CD reads them without credentials, and no company system is involved.
+- Services in public GitHub repositories on a personal account. Argo CD reads them without credentials, and no company system is involved. Private repositories would mean a deploy key or a GitHub App, and one more secret to keep out of Git.
 
 ## Crossplane
 
@@ -29,7 +31,7 @@ Why the lab is built the way it is. Most of these trade realism for something th
 - A service requests infrastructure in the same values files as everything else (`bucket:`), and the platform's chart renders the request. It goes through the same pull request, validation and promotion, and staging and production get separate resources. The alternative, request files in a separate repository, gives shared infrastructure a home but splits what a service needs across two places.
 - Argo CD never deletes a service's data on its own: the requests the chart renders are exempt from pruning and from deletion with their Application, and the APIs themselves aren't pruned either, since deleting an XRD deletes every request made through it. Removing any of them is an explicit operation.
 - AWS providers built by crossplane-contrib. Upbound publishes the same providers, but only their latest version is free; contrib's builds are Apache 2.0 and every version stays available.
-- Postgres in the cluster, run by CloudNativePG. LocalStack never included RDS, and the operator handles what a managed database would: replicas, failover and credentials.
+- Postgres in the cluster, run by CloudNativePG. LocalStack never included RDS, and the operator handles what a managed database would: replicas, failover and credentials. What the lab leaves out is what a company would set up first: backups to object storage, and a restore someone has actually run.
 - Only the resource types the platform uses are activated. The S3 provider alone ships 50, and each active one is a CRD the API server and Argo CD keep track of. With so few, the lab doesn't need the higher Argo CD API rate limit that Crossplane's Argo CD guide recommends.
 - Every package pinned in Git, dependencies included. The family provider is declared rather than left to Crossplane's dependency resolution, which would install whatever version it finds.
 - Compositions in Go templates (function-go-templating). They read like the Helm templates of the platform's chart.
@@ -48,3 +50,5 @@ Why the lab is built the way it is. Most of these trade realism for something th
 
 - just. Readable recipes, pinned by mise like the rest of the toolchain. Anything longer than a few lines lives in `scripts/`, so the justfile stays a list of what you can do.
 - `setup.sh` in plain bash. It has to work before mise and just exist.
+- An authoring loop that doesn't go through Git. Changing a Composition and pushing it to see what happens is a two-minute round trip. `just render <api>` runs the same functions Crossplane runs, here, in about a second, and checks the result against the schemas it has to satisfy. `just local <app>` goes further and applies a folder from disk, which means pausing Argo CD for it, and `just gitops` hands it back. Git stays the truth; the loop only admits that nobody writes a Composition right the first time.
+- Each API ships an example request next to its Composition. It's what `just render` renders, and what to copy when asking for one by hand. The Application that delivers the APIs excludes those files, or it would create them in the cluster.

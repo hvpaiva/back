@@ -11,9 +11,11 @@ Everything runs on your machine, in a kind cluster, with LocalStack standing in 
 
 ## What this is, and what it isn't
 
-It's a reference setup you can run, poke at and read. It makes the connections between the tools visible, along with the rough edges a platform team hits when putting them together.
+It's a lab. The four tools are already wired together, so you can use the platform they make and change it: ask it for a queue and watch what it becomes, or swap what a request is fulfilled with and watch nothing downstream notice.
 
-It isn't a course. It doesn't teach each tool from scratch; their own documentation does that better. It isn't production-ready either: one node, no TLS, local accounts instead of single sign-on, and an AWS emulator that no longer gets updates.
+What carries over to a real platform is the shape of it: the contracts between the tools, the APIs, the chart, and who owns what. What doesn't is the infrastructure underneath, which is a stage set: one node, no TLS, local accounts instead of single sign-on, and an AWS emulator that no longer gets updates. [Decisions](docs/decisions.md) says what a company would do instead, where the difference matters.
+
+It isn't a course either. It doesn't teach each tool from scratch; their own documentation does that better.
 
 ## What you'll see
 
@@ -71,6 +73,12 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 
 Run this way, the lab follows the repositories above on GitHub. Everything works and you can inspect all of it, but you can't change what it deploys: Argo CD reads GitHub, not your disk.
 
+## Once it's running
+
+There are two ways around the lab, and they want different things. Using the platform is Argo CD, the services and the requests: `kubectl apply -f platform/apis/queue/example.yaml` asks for a queue the way a service would, and `crossplane resource trace queues.back.lab emails -n hello-staging` shows what the platform made of it. Changing the platform is the other half: `just render cache` prints what a request would create, in a second and without the cluster, and `just local apis` applies the folder you're editing instead of what Git says, until `just gitops` hands it back.
+
+[Things to try](docs/experiments.md) walks both, and [when something doesn't work](docs/troubleshooting.md) is where to look when one of them doesn't.
+
 ## Run it from your own GitHub
 
 Watching a change flow through the lab means pushing to repositories Argo CD watches, so you need your own copies. These steps are on you; the lab can't do them:
@@ -108,7 +116,7 @@ In this repository:
 - `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, CloudNativePG, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages, its permissions and its connection to LocalStack; `platform/apis/` holds the APIs services request resources through; `platform/rbac/` says what each team can see.
 - `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls: `go.yaml` checks Go services, `delivery.yaml` validates and ships any service.
 - `scripts/` holds what the longer `just` recipes run.
-- `docs/` explains [how it works](docs/how-it-works.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
+- `docs/` explains [how it works](docs/how-it-works.md), suggests [things to try](docs/experiments.md), gives the order to look in [when something doesn't work](docs/troubleshooting.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
 
 ## Isolation
 
