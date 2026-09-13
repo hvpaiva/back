@@ -66,6 +66,12 @@ Only an Application with a single source pointing at a folder of this repository
 disk, which here means `apis`, `rbac` and `root`. Everything else changes by pushing, and
 `just local` says which it is.
 
+The CLI also warns that a local diff without `--server-side-generate` is deprecated, and that flag
+doesn't work here: the server rejects the upload as a checksum mismatch for an empty archive
+(`calc e3b0c442…`, the hash of nothing), with or without `--local-repo-root`. Sending the folder to
+the server is a gRPC stream, and the lab reaches Argo CD as grpc-web over plain HTTP through Traefik.
+Until that combination works, the warning is what the loop costs.
+
 ## Letting teams create their namespaces
 
 Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.

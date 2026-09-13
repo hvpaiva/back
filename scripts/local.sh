@@ -60,7 +60,8 @@ case ${1:-} in
     login
     section "What $path would change in the cluster"
     # A difference is the expected answer here, and the CLI exits non-zero for it.
-    argocd app diff "$2" --local "$path" --exit-code=false
+    KUBECTL_EXTERNAL_DIFF=${KUBECTL_EXTERNAL_DIFF:-diff -u --color} \
+      argocd app diff "$2" --local "$path" --exit-code=false
     ;;
   apply)
     [[ -n ${2:-} ]] || usage apply
@@ -70,7 +71,8 @@ case ${1:-} in
     argocd app set root --sync-policy manual >/dev/null
     argocd app set "$2" --sync-policy manual >/dev/null
     argocd app sync "$2" --local "$path"
-    ok "$2 runs what's in $path, and stays OutOfSync against Git until you push it"
+    ok "$2 runs what's in $path, and Argo CD compares it against that folder now, not against Git"
+    hint "root is the one that shows OutOfSync: its copy of $2 still has Git's sync policy"
     hint "just gitops puts it back"
     ;;
   gitops)

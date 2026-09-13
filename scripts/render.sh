@@ -33,6 +33,15 @@ crossplane render "$dir/example.yaml" "$dir/composition.yaml" platform/crossplan
 cat "$rendered"
 
 exec >&2
+section "What $api renders"
+# Two kinds can share a name here: the request's own, and the provider's it composes.
+awk '/^apiVersion: / { split($2, v, "/"); group = v[1] }
+     /^kind: / { kind = $2 }
+     /^  name: / && kind != "" { printf "  %-37s %s\n", group "/" kind, $2; kind = "" }' "$rendered"
+
 section "Checking $api against the API's and the providers' schemas"
 # Only what isn't already fine, plus the totals; a schema it doesn't satisfy is the answer, not a crash.
-crossplane resource validate "$work" "$rendered" | awk '!/^\[✓\]/ { print "  " $0 }' || exit 1
+# Built-in schemas come from the cluster's Crossplane (platform/apps/crossplane.yaml), not from `stable`.
+crossplane resource validate "$work" "$rendered" \
+  --crossplane-image xpkg.crossplane.io/crossplane/crossplane:v2.4.0 |
+  awk '!/^\[✓\]/ { print "  " $0 }' || exit 1
