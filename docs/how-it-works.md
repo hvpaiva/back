@@ -79,7 +79,7 @@ Services call them at `main`, so a fix reaches all of them at once.
 
 | Request | What the platform makes of it |
 |---|---|
-| `Bucket` | an S3 bucket named `<namespace>-<name>`, with versioning if asked for |
+| `Bucket` | an S3 bucket named `<namespace>-<name>`, or just `<namespace>` when that already starts with the name, with versioning if asked for |
 | `Queue` | an SQS queue, plus a dead-letter queue where messages land after five failed deliveries |
 | `Table` | a DynamoDB table with the keys asked for, billed per request |
 | `Cache` | a Valkey server in the namespace, Redis-compatible, with a memory cap and a password of its own |

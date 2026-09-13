@@ -18,7 +18,11 @@ spec:
         inline:
           template: |
             {{- $xr := .observed.composite.resource }}
+            {{- /* The namespace is what makes the name unique; don't repeat what it already says. */}}
             {{- $bucket := printf "%s-%s" $xr.metadata.namespace $xr.metadata.name }}
+            {{- if hasPrefix (printf "%s-" $xr.metadata.name) $xr.metadata.namespace }}
+              {{- $bucket = $xr.metadata.namespace }}
+            {{- end }}
             {{- $region := "us-east-1" }}
             ---
             apiVersion: s3.aws.m.upbound.io/v1beta1
