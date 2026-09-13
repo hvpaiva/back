@@ -34,6 +34,12 @@ headlamp() {
   curl -fsS -o /dev/null http://headlamp.localhost/ && echo "http://headlamp.localhost (token: just headlamp-token)"
 }
 
+# Its page answers before it can reach the cluster, so ask the part that has to.
+crossview() {
+  curl -fsS http://crossview.localhost/api/kubernetes/status |
+    jq -er 'if .status == "ok" then "http://crossview.localhost" else error("its API answered \(.status)") end'
+}
+
 crossplane_packages() {
   kubectl get providers.pkg.crossplane.io,functions.pkg.crossplane.io --output json | jq -er '.items
     | if length > 0 and all(any(.status.conditions[]?; .type == "Healthy" and .status == "True"))
@@ -77,6 +83,7 @@ report gateway gateway
 report localstack localstack
 report argocd argocd_server
 report headlamp headlamp
+report crossview crossview
 report crossplane crossplane_packages
 report reloader reloader
 scripts/identities.sh check || problems=$((problems + 1))

@@ -12,6 +12,7 @@ spec:
     - https://github.com/hvpaiva/back.git
     - https://argoproj.github.io/argo-helm
     - https://kubernetes-sigs.github.io/headlamp/
+    - https://crossplane-contrib.github.io/crossview
     - https://charts.crossplane.io/stable
     - https://cloudnative-pg.github.io/charts
     - https://stakater.github.io/stakater-charts

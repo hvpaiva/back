@@ -55,10 +55,11 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 | Argo CD | http://argocd.localhost (user `dev` or `platform-admin`, password from `just argocd-password <user>`) |
 | kubectl | From this directory: `kubectl --context dev` or `--context platform-admin` |
 | Headlamp | http://headlamp.localhost (token from `just headlamp-token`) |
+| Crossview | http://crossview.localhost (the requests, what each composed, and the providers behind them) |
 | hello | http://hello.staging.localhost and http://hello.localhost |
 | Traefik | http://traefik.localhost/dashboard/ |
 | LocalStack | http://localhost:4566 (`aws s3 ls` from this directory lists its buckets) |
-| Crossplane | No UI of its own: the `crossplane` Application in Argo CD, or `kubectl get providers,functions` |
+| Crossplane | Crossview, above, or `kubectl get providers,functions` |
 
 `just` lists every recipe, and `just down` deletes the cluster. The lab uses about 5 GB of RAM and 8 GB of disk.
 
