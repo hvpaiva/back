@@ -1,0 +1,46 @@
+# What the UI over Crossplane reads. Its chart grants every resource in the cluster, Secrets included;
+# this names the groups instead, and a group missing here disappears from its pages without an error.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: crossview
+rules:
+  - apiGroups: [""]
+    resources: [namespaces, events, services]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [get, list, watch]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
+  - apiGroups:
+      - apiextensions.crossplane.io
+      - pkg.crossplane.io
+      - protection.crossplane.io
+      - ops.crossplane.io
+    resources: ["*"]
+    verbs: [get, list, watch]
+  - apiGroups:
+      - back.lab
+      - aws.upbound.io
+      - aws.m.upbound.io
+      - s3.aws.m.upbound.io
+      - sqs.aws.m.upbound.io
+      - dynamodb.aws.m.upbound.io
+      - postgresql.cnpg.io
+    resources: ["*"]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: crossview
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: crossview
+subjects:
+  - kind: ServiceAccount
+    name: crossview-sa
+    namespace: crossview

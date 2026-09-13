@@ -36,8 +36,27 @@ headlamp() {
 
 # Its page answers before it can reach the cluster, so ask the part that has to.
 crossview() {
-  curl -fsS http://crossview.localhost/api/kubernetes/status |
-    jq -er 'if .status == "ok" then "http://crossview.localhost" else error("its API answered \(.status)") end'
+  local status granted group missing=()
+  status=$(curl -fsS http://crossview.localhost/api/kubernetes/status | jq -r '.status')
+  if [[ $status != ok ]]; then
+    echo "its API answered ${status:-nothing}"
+    return 1
+  fi
+  granted=$(kubectl get clusterrole crossview \
+    --output jsonpath='{range .rules[*]}{range .apiGroups[*]}{@}{","}{end}{end}')
+  # A group it can't read leaves its pages shorter, with no error there or anywhere else.
+  while IFS= read -r group; do
+    [[ -n $group && ",$granted" != *",$group,"* ]] && missing+=("$group")
+  done < <({
+    kubectl api-resources --categories=crossplane --output name | sed 's/^[^.]*\.//'
+    kubectl get compositeresourcedefinitions \
+      --output jsonpath='{range .items[*]}{.spec.group}{"\n"}{end}'
+  } | sort -u)
+  if ((${#missing[@]} > 0)); then
+    echo "doesn't read ${missing[*]}, which the cluster serves: add them in platform/crossview/rbac.yaml"
+    return 1
+  fi
+  echo "http://crossview.localhost"
 }
 
 crossplane_packages() {
