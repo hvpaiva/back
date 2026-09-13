@@ -37,6 +37,7 @@ else
   bold='' green='' yellow='' red='' reset=''
 fi
 problems=0
+port_problems=0
 section() { printf '\n%s%s%s\n' "$bold" "$1" "$reset"; }
 ok() { printf '  %sok%s    %s\n' "$green" "$reset" "$1"; }
 warn() { printf '  %swarn%s  %s\n' "$yellow" "$reset" "$1"; }
@@ -282,7 +283,10 @@ else
       continue
     fi
     fail "port $port is already in use"
-    if command -v ss >/dev/null; then
+    port_problems=$((port_problems + 1))
+    if $docker_ok; then
+      hint "see by what: docker ps --filter publish=$port"
+    elif command -v ss >/dev/null; then
       hint "see by what: sudo ss -ltnp 'sport = :$port'"
     else
       hint "see by what: sudo lsof -nP -iTCP:$port -sTCP:LISTEN"
@@ -310,7 +314,13 @@ else
   toolchain_status() { "$mise_bin" ls --local --missing </dev/null 2>&1; }
   if ! status=$(toolchain_status) || [[ -n $status ]]; then
     if ask "Install the toolchain pinned in mise.toml (trusts the file; tools go under ~/.local/share/mise)?"; then
-      if "$mise_bin" trust --quiet; then "$mise_bin" install; fi
+      if "$mise_bin" trust --quiet; then
+        ok "mise.toml is trusted"
+        # Named one by one: a bare `mise install` takes every tool in every config file above this one.
+        status=$(toolchain_status) || status=''
+        mapfile -t pending < <(awk 'NF { print $1 "@" $NF }' <<<"$status")
+        if ((${#pending[@]} > 0)); then "$mise_bin" install "${pending[@]}"; fi
+      fi
     fi
   fi
   if ! status=$(toolchain_status); then
@@ -369,7 +379,9 @@ fi
 section "Summary"
 if ((problems > 0)); then
   printf '  %sProblems found: %d. See above.%s\n' "$red" "$problems" "$reset"
-  if [[ $mode == check && -n $family ]]; then hint "./setup.sh can fix most of them"; fi
+  if [[ $mode == check && -n $family ]] && ((problems > port_problems)); then
+    hint "./setup.sh can fix most of them"
+  fi
   exit 1
 fi
 if [[ $mode == check ]]; then
