@@ -40,8 +40,14 @@ awk '/^apiVersion: / { split($2, v, "/"); group = v[1] }
      /^  name: / && kind != "" { printf "  %-37s %s\n", group "/" kind, $2; kind = "" }' "$rendered"
 
 section "Checking $api against the API's and the providers' schemas"
+# The built-in schemas come from the Crossplane the cluster runs, read from its chart, not from `stable`.
+version=$(awk '/chart: crossplane/ { found = 1 }
+               found && /targetRevision:/ { print $2; exit }' platform/apps/crossplane.yaml)
+if [[ -z $version ]]; then
+  fail "platform/apps/crossplane.yaml doesn't say which Crossplane the cluster runs"
+  exit 1
+fi
 # Only what isn't already fine, plus the totals; a schema it doesn't satisfy is the answer, not a crash.
-# Built-in schemas come from the cluster's Crossplane (platform/apps/crossplane.yaml), not from `stable`.
 crossplane resource validate "$work" "$rendered" \
-  --crossplane-image xpkg.crossplane.io/crossplane/crossplane:v2.4.0 |
+  --crossplane-image "xpkg.crossplane.io/crossplane/crossplane:v$version" |
   awk '!/^\[✓\]/ { print "  " $0 }' || exit 1
