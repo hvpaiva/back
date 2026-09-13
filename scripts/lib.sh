@@ -15,3 +15,7 @@ fail() {
   problems=$((problems + 1))
 }
 hint() { printf '        %s\n' "$1"; }
+
+# Which command stopped the script, functions included (-E). Failures inside a condition stop nothing.
+crashed() { printf '  %sfail%s  %s\n' "$red" "$reset" "$1" >&2; }
+trap '((BASH_SUBSHELL)) || crashed "${BASH_SOURCE[0]##*/}:$LINENO: $BASH_COMMAND"' ERR

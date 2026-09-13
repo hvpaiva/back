@@ -7,7 +7,7 @@
 #   scripts/render.sh bucket                     what the Composition would create
 #   scripts/render.sh cache -o observed.yaml     ... given resources that already exist
 #   scripts/render.sh database -e secret.yaml    ... given resources it reads from the cluster
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
@@ -34,5 +34,5 @@ cat "$rendered"
 
 exec >&2
 section "Checking $api against the API's and the providers' schemas"
-# Only what isn't already fine, plus the totals; a failure here fails the recipe.
-crossplane resource validate "$work" "$rendered" | awk '!/^\[✓\]/ { print "  " $0 }'
+# Only what isn't already fine, plus the totals; a schema it doesn't satisfy is the answer, not a crash.
+crossplane resource validate "$work" "$rendered" | awk '!/^\[✓\]/ { print "  " $0 }' || exit 1

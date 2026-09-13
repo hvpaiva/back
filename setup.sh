@@ -6,8 +6,9 @@
 #   ./setup.sh           check everything and offer to fix what's missing
 #   ./setup.sh --yes     same, answering yes to every question
 #   ./setup.sh --check   only check, change nothing (`just up` runs this first)
-set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+# No -e: a checker reports what it finds, so one surprising failure shouldn't take the rest with it.
+set -uo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 
 mode=setup
 assume_yes=false
@@ -193,12 +194,12 @@ if [[ $state == missing ]] && [[ -n $family ]] && can_sudo &&
 fi
 if [[ $state == not-running ]] && has_systemd && can_sudo &&
   ask "The Docker daemon isn't running. Start it now and at boot (systemctl enable --now docker)?"; then
-  as_root systemctl enable --now docker || true
+  as_root systemctl enable --now docker
   state=$(docker_state)
 fi
 if [[ $state == no-permission ]] && ! in_docker_group && can_sudo &&
   ask "Add $me to the docker group, so Docker works without sudo?"; then
-  as_root usermod -aG docker "$me" || true
+  as_root usermod -aG docker "$me"
 fi
 
 docker_ok=false
@@ -292,7 +293,7 @@ fi
 # --- mise and the toolchain --------------------------------------------------
 
 section "mise"
-mise_bin=$(command -v mise || true)
+mise_bin=$(command -v mise) || mise_bin=''
 if [[ -z $mise_bin && -x $HOME/.local/bin/mise ]]; then mise_bin=$HOME/.local/bin/mise; fi
 if [[ -z $mise_bin ]] && command -v curl >/dev/null &&
   ask "mise isn't installed. Install it with its official installer (no sudo, into ~/.local/bin)?"; then
@@ -309,7 +310,7 @@ else
   toolchain_status() { "$mise_bin" ls --local --missing </dev/null 2>&1; }
   if ! status=$(toolchain_status) || [[ -n $status ]]; then
     if ask "Install the toolchain pinned in mise.toml (trusts the file; tools go under ~/.local/share/mise)?"; then
-      if "$mise_bin" trust --quiet; then "$mise_bin" install || true; fi
+      if "$mise_bin" trust --quiet; then "$mise_bin" install; fi
     fi
   fi
   if ! status=$(toolchain_status); then
@@ -338,9 +339,13 @@ else
     if [[ -n $rc_file ]] && grep -qs 'mise activate' "$rc_file"; then
       warn "mise is activated in $rc_file, but not in this shell: open a new terminal"
     elif [[ -n $rc_file ]] && ask "Activate mise in $rc_file (appends one line)?"; then
-      printf '\n# mise: pinned tools and per-directory env (added by the BACK lab setup.sh)\n%s\n' \
-        "$activate_line" >>"$rc_file"
-      warn "mise activation added to $rc_file: open a new terminal to use it"
+      if printf '\n# mise: pinned tools and per-directory env (added by the BACK lab setup.sh)\n%s\n' \
+        "$activate_line" >>"$rc_file"; then
+        warn "mise activation added to $rc_file: open a new terminal to use it"
+      else
+        fail "couldn't add mise activation to $rc_file"
+        hint "$activate_line"
+      fi
     else
       warn "mise isn't active in this shell: use 'mise exec -- just up', or activate it with:"
       hint "$activate_line"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Points the lab at your forks: replaces github.com/hvpaiva/ in platform/ with your account,
 # and commits (just use-fork <your-github-user>).
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 

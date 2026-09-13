@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Waits until every Argo CD Application is synced and healthy, for up to ten minutes (just wait).
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 

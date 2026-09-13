@@ -6,7 +6,7 @@
 #   scripts/local.sh diff apis     what applying platform/apis/ from here would change
 #   scripts/local.sh apply apis    apply it, and stop Argo CD from putting Git back
 #   scripts/local.sh gitops        put every Application back under Git
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
@@ -50,7 +50,7 @@ usage() { # command
 case ${1:-} in
   diff)
     [[ -n ${2:-} ]] || usage diff
-    path=$(source_path "$2")
+    path=$(source_path "$2") || exit 1
     login
     section "What $path would change in the cluster"
     # A difference is the expected answer here, and the CLI exits non-zero for it.
@@ -58,7 +58,7 @@ case ${1:-} in
     ;;
   apply)
     [[ -n ${2:-} ]] || usage apply
-    path=$(source_path "$2")
+    path=$(source_path "$2") || exit 1
     section "Syncing $2 from $path"
     login
     argocd app set root --sync-policy manual >/dev/null

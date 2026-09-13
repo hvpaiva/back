@@ -6,7 +6,7 @@
 #   scripts/identities.sh          issue what's missing (just identities)
 #   scripts/identities.sh check    check that each context authenticates, in its group
 #   scripts/identities.sh remove   remove the contexts from the lab's kubeconfig (just down)
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
@@ -73,7 +73,7 @@ case ${1:-issue} in
     for identity in "${identities[@]}"; do
       user=${identity%%:*} group=${identity#*:}
       if ! authenticates "$user" "$group"; then
-        issue_certificate "$user" "$group"
+        issue_certificate "$user" "$group" || exit 1
       fi
     done
     set_passwords
@@ -92,7 +92,7 @@ case ${1:-issue} in
         hint "just identities"
       fi
     done
-    ((problems == 0))
+    if ((problems > 0)); then exit 1; fi
     ;;
   remove)
     for identity in "${identities[@]}"; do

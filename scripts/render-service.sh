@@ -5,7 +5,7 @@
 #
 #   scripts/render-service.sh                            ../back-hello/charts/hello
 #   scripts/render-service.sh ../back-other/charts/api   another service, from its chart folder
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
@@ -55,4 +55,4 @@ else
   warn "no cluster: only Helm checked these"
 fi
 
-((problems == 0))
+if ((problems > 0)); then exit 1; fi

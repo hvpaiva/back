@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke-tests the lab from the host (just check): every component answers, every identity
 # authenticates, and hello runs in both stages and reaches its bucket.
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
@@ -56,4 +56,4 @@ report crossplane crossplane_packages
 scripts/identities.sh check || problems=$((problems + 1))
 report hello hello staging http://hello.staging.localhost
 report hello hello production http://hello.localhost
-((problems == 0))
+if ((problems > 0)); then exit 1; fi

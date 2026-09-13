@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Gives Argo CD the GitHub App it reports deployments to GitHub with, from .env (just notifications).
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
