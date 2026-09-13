@@ -23,6 +23,10 @@ spec:
             {{- if hasPrefix (printf "%s-" $xr.metadata.name) $xr.metadata.namespace }}
               {{- $bucket = $xr.metadata.namespace }}
             {{- end }}
+            {{- /* S3 stops at 63 characters, and the hash keeps a shortened name unique. */}}
+            {{- if gt (len $bucket) 63 }}
+              {{- $bucket = printf "%s-%s" (trunc 54 $bucket) (trunc 8 (sha256sum $bucket)) }}
+            {{- end }}
             {{- /* A bucket that already exists keeps the name it was created with: S3 has no rename. */}}
             {{- if .observed.resources }}
               {{- $existing := dig "bucket" "resource" "metadata" "annotations" "crossplane.io/external-name" "" .observed.resources }}
