@@ -11,15 +11,18 @@ spec:
   goTemplateOptions: ["missingkey=error"]
   generators:
     - matrix:
+        # A matrix takes exactly two generators, so the repositories share the stages' list.
         generators:
           - list:
               elements:
-                - stage: staging
+                - repo: https://github.com/hvpaiva/back-hello.git
+                  stage: staging
                   branch: staging
-                - stage: production
+                - repo: https://github.com/hvpaiva/back-hello.git
+                  stage: production
                   branch: main
           - git:
-              repoURL: https://github.com/hvpaiva/back-hello.git
+              repoURL: '{{ .repo }}'
               revision: '{{ .branch }}'
               files:
                 - path: charts/*/values.yaml
@@ -44,7 +47,7 @@ spec:
             parameters:
               - name: platform.stage
                 value: '{{ .stage }}'
-        - repoURL: https://github.com/hvpaiva/back-hello.git
+        - repoURL: '{{ .repo }}'
           targetRevision: '{{ .branch }}'
           ref: values
       destination:
