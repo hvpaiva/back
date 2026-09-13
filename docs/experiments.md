@@ -88,7 +88,17 @@ just gitops                                        # hand it back to Git
 delivers all of them (`kubectl -n argocd get applications` lists the rest).
 
 The Secret keeps its keys, the Service keeps its address, and anything reading them notices
-nothing. That's what an API buys over a template. `just local` pauses Argo CD's enforcement for
+nothing. That's what an API buys over a template. A value that changes is a different matter, since
+`envFrom` is read once, at start: add a key to a composed Secret and the service rolls within a
+second, because Reloader watches the Secrets a pod reads. Crossplane leaves that key alone, owning
+only the fields it writes itself, so take it back out and watch the service roll again.
+
+```sh
+kubectl -n hello-staging patch secret hello-bucket --type merge -p '{"stringData":{"PROBE":"1"}}'
+kubectl -n hello-staging get pods -w
+kubectl -n hello-staging patch secret hello-bucket --type json -p '[{"op":"remove","path":"/data/PROBE"}]'
+```
+ `just local` pauses Argo CD's enforcement for
 that folder and for the root Application that would restore it, so while it's on, the cluster and
 Git disagree on purpose.
 

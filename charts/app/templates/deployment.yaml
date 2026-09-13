@@ -5,6 +5,8 @@ metadata:
   name: {{ .Values.application.name }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    reloader.stakater.com/auto: "true"
 spec:
   replicas: {{ $size.replicas }}
   selector:

@@ -14,6 +14,7 @@ spec:
     - https://kubernetes-sigs.github.io/headlamp/
     - https://charts.crossplane.io/stable
     - https://cloudnative-pg.github.io/charts
+    - https://stakater.github.io/stakater-charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"
