@@ -284,12 +284,15 @@ else
     fi
     fail "port $port is already in use"
     port_problems=$((port_problems + 1))
+    host_prefix="see by what"
     if $docker_ok; then
       hint "see by what: docker ps --filter publish=$port"
-    elif command -v ss >/dev/null; then
-      hint "see by what: sudo ss -ltnp 'sport = :$port'"
+      host_prefix="or, if that lists nothing"
+    fi
+    if command -v ss >/dev/null; then
+      hint "$host_prefix: sudo ss -ltnp 'sport = :$port'"
     else
-      hint "see by what: sudo lsof -nP -iTCP:$port -sTCP:LISTEN"
+      hint "$host_prefix: sudo lsof -nP -iTCP:$port -sTCP:LISTEN"
     fi
   done
 fi
