@@ -144,7 +144,7 @@ A provider compares each managed resource with the cloud every ten minutes by de
 
 ## Traefik's chart warns about CRDs it doesn't ship
 
-`just up` prints a deprecation notice from the Traefik chart: the Gateway API CRDs will no longer be shipped, and it names a version older than the one running here. The chart ships none of them already, `helm show crds` lists only `traefik.io` and `hub.traefik.io`, and the justfile installs the Gateway API itself, at the version Traefik is built against.
+Installing Traefik prints a deprecation notice from its chart: the Gateway API CRDs will no longer be shipped, and it names a version older than the one running here. The chart ships none of them already, `helm show crds` lists only `traefik.io` and `hub.traefik.io`, and `scripts/base.sh` installs the Gateway API itself, at the version Traefik is built against. That step keeps the chart's output to itself unless it fails, so the notice only shows when you run the `helm upgrade` by hand.
 
 ## The argocd CLI and Traefik
 

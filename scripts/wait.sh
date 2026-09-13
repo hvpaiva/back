@@ -21,9 +21,14 @@ for _ in $(seq 120); do
     fi
   else
     healthy_checks=0
-    pending=${pending:-the Applications root creates}
     if [[ $pending != "$last" ]]; then
-      waiting "$pending"
+      if [[ -z $pending ]]; then
+        waiting "the Applications root creates"
+      elif ((count > 1)); then
+        waiting "$((count - $(wc -w <<<"$pending"))) of $count Applications ready, waiting for $pending"
+      else
+        waiting "$pending"
+      fi
       last=$pending
     fi
   fi

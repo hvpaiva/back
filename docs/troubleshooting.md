@@ -16,6 +16,9 @@ platform team would run in a real cluster.
 Run everything from this directory: `mise.toml` points kubectl, the argocd CLI and the AWS CLI at
 the lab.
 
+A step of `just up` that fails prints what the tool said, right there. Every run also appends it to
+`.logs/lab.log`, with the command and the time, which is where to read the run before this one.
+
 ## The cluster won't come up
 
 `kind create cluster` fails when something else holds port 80, 443 or 4566, usually another cluster

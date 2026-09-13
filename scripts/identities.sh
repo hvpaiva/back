@@ -5,6 +5,7 @@
 #
 #   scripts/identities.sh          issue what's missing (just identities)
 #   scripts/identities.sh check    check that each context authenticates, in its group
+#   scripts/identities.sh login    log the argocd CLI in as one of them (just argocd-login)
 #   scripts/identities.sh remove   remove the contexts from the lab's kubeconfig (just down)
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -94,6 +95,20 @@ case ${1:-issue} in
     done
     if ((problems > 0)); then exit 1; fi
     ;;
+  login)
+    user=${2:-platform-admin}
+    section "Argo CD"
+    if argocd login argocd.localhost:80 --skip-test-tls --name "$user" --username "$user" \
+      --password "$(kubectl --namespace argocd get secret argocd-account-passwords \
+        --output jsonpath="{.data.$user}" | base64 --decode)" >/dev/null 2>&1; then
+      ok "the argocd CLI is $user now, in a context of that name"
+      hint "switch with just argocd-login <user>: argocd context can't, with the lab's own config"
+    else
+      fail "$user couldn't log in to Argo CD"
+      hint "just identities issues the accounts and their passwords"
+      exit 1
+    fi
+    ;;
   remove)
     for identity in "${identities[@]}"; do
       user=${identity%%:*}
@@ -102,7 +117,7 @@ case ${1:-issue} in
     done
     ;;
   *)
-    echo "usage: $0 [issue|check|remove]" >&2
+    echo "usage: $0 [issue|check|login|remove]" >&2
     exit 2
     ;;
 esac

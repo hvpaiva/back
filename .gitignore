@@ -2,4 +2,6 @@
 
 .argocd/
 
+.logs/
+
 .env
