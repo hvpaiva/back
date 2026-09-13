@@ -95,12 +95,12 @@ case " ${ID:-} ${ID_LIKE:-} " in
   *" ubuntu "*) family=ubuntu pkg_manager=apt ;;
   *" arch "*) family=arch pkg_manager=pacman ;;
 esac
-if [[ ${ID:-} == arch ]] || [[ ${ID:-} == ubuntu && ${VERSION_ID:-} == 24.04 ]]; then
+if [[ $family == arch ]] || [[ ${ID:-} == ubuntu && ${VERSION_ID:-} == 24.04 ]]; then
   ok "$system_name"
 elif [[ -n $family ]]; then
-  warn "$system_name: the lab is tested on Ubuntu 24.04 and Arch"
+  warn "$system_name: the lab is tested on Ubuntu 24.04 and Omarchy"
 else
-  warn "$system_name: the lab is tested on Ubuntu 24.04 and Arch; install system packages (curl, git, OpenSSL, Docker) yourself"
+  warn "$system_name: the lab is tested on Ubuntu 24.04 and Omarchy; install system packages (curl, git, OpenSSL, Docker) yourself"
 fi
 
 # --- Base tools --------------------------------------------------------------
@@ -189,7 +189,7 @@ if [[ $state != missing ]] && docker_is_podman; then
   warn "docker here runs podman: the lab is tested with Docker Engine, and kind uses podman only with KIND_EXPERIMENTAL_PROVIDER=podman"
 fi
 if [[ $state == missing ]] && [[ -n $family ]] && can_sudo &&
-  ask "Docker isn't installed. Install Docker Engine $docker_source and add $me to the docker group?"; then
+  ask "Docker isn't installed. Install Docker Engine $docker_source and add $me to the docker group (equivalent to root here)?"; then
   if install_docker; then ok "Docker Engine installed"; else fail "Docker Engine installation failed (see above)"; fi
   state=$(docker_state)
 fi
@@ -199,7 +199,7 @@ if [[ $state == not-running ]] && has_systemd && can_sudo &&
   state=$(docker_state)
 fi
 if [[ $state == no-permission ]] && ! in_docker_group && can_sudo &&
-  ask "Add $me to the docker group, so Docker works without sudo?"; then
+  ask "Add $me to the docker group, equivalent to root here, so Docker works without sudo?"; then
   as_root usermod -aG docker "$me"
 fi
 
@@ -225,10 +225,10 @@ case $state in
   no-permission)
     if in_docker_group; then
       fail "$me is in the docker group, but this session started before that"
-      hint "log out and back in (or run: newgrp docker), then run ./setup.sh again"
+      hint "log out of your desktop session and back in (or run: newgrp docker), then run ./setup.sh again"
     else
       fail "$me can't use Docker without sudo"
-      hint "sudo usermod -aG docker $me, then log out and back in"
+      hint "sudo usermod -aG docker $me, then log out of your desktop session and back in"
     fi
     ;;
 esac
@@ -248,7 +248,7 @@ if [[ -z $ram_gib ]]; then
 elif ((ram_gib >= min_ram_gib)); then
   ok "$ram_gib GiB of RAM"
 else
-  warn "$ram_gib GiB of RAM: the lab uses about 4 GiB and grows as components are added ($min_ram_gib GiB recommended)"
+  warn "$ram_gib GiB of RAM: the lab uses about 5 GiB and grows as components are added ($min_ram_gib GiB recommended)"
 fi
 
 docker_dir=/var/lib/docker

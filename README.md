@@ -40,7 +40,7 @@ One thing doesn't bend: a change to `charts/app` reaches the cluster by push. Ar
 
 ## Run it
 
-Tested on Ubuntu 24.04 and Arch, where `setup.sh` also installs what's missing. On other systems it runs the same checks and tells you what to install.
+Tested on Ubuntu 24.04 and Omarchy, where `setup.sh` also installs what's missing; the rest of the Arch family installs the same way. On other systems it runs the same checks and tells you what to install.
 
 ```sh
 git clone https://github.com/hvpaiva/back.git && cd back
@@ -48,7 +48,7 @@ git clone https://github.com/hvpaiva/back.git && cd back
 just up      # creates the cluster and waits until everything is healthy (a few minutes)
 ```
 
-`setup.sh` checks Docker, free ports (80, 443, 4566), RAM, disk and the tools pinned in `mise.toml`, and can add a line to your shell rc that activates [mise](https://mise.jdx.dev). If mise isn't active in your shell, prefix commands with `mise exec --`, as in `mise exec -- just up`.
+`setup.sh` checks Docker, free ports (80, 443, 4566), RAM, disk and the tools pinned in `mise.toml`, and can add a line to your shell rc that activates [mise](https://mise.jdx.dev). Joining the `docker` group, which it offers to do, is equivalent to root on that machine: anyone in it can start a container that mounts the whole filesystem. If mise isn't active in your shell, prefix commands with `mise exec --`, as in `mise exec -- just up`.
 
 | What | Where |
 |---|---|
@@ -60,7 +60,7 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 | LocalStack | http://localhost:4566 (`aws s3 ls` from this directory lists its buckets) |
 | Crossplane | No UI of its own: the `crossplane` Application in Argo CD, or `kubectl get providers,functions` |
 
-`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 4 GB of RAM and 8 GB of disk.
+`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 5 GB of RAM and 8 GB of disk.
 
 Run this way, the lab follows the repositories above on GitHub: everything works and you can inspect all of it. Argo CD reads GitHub rather than your disk, so changing what it deploys means either handing one folder to your working copy with `just local`, or running from your own forks, further down.
 
