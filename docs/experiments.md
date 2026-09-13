@@ -31,6 +31,28 @@ cluster's other custom resources.
 No service uses that one. `Bucket` is the only request the chart renders today, from `bucket:` in a
 service's values; the others exist so the platform offers more than one kind of thing.
 
+### Change what a service was given
+
+`envFrom` is read once, at start, so a rotated password or a renamed bucket would reach new pods and
+never the ones already running. The platform runs Reloader for that: it watches the Secrets a pod
+reads and rolls the Deployment when one of them changes.
+
+```sh
+kubectl -n hello-staging patch secret hello-bucket --type merge -p '{"stringData":{"PROBE":"1"}}'
+kubectl -n hello-staging get pods -w
+```
+
+The pods are replaced within a second or two. Crossplane leaves the extra key alone, owning only the
+fields it writes itself, so take it back out and the service rolls again:
+
+```sh
+kubectl -n hello-staging patch secret hello-bucket --type json -p '[{"op":"remove","path":"/data/PROBE"}]'
+```
+
+Reloader watches the namespaces the platform names for it, in `platform/apps/reloader.yaml`, and
+`just check` says which those are. Watching the whole cluster instead would hand it every Secret in
+it, Argo CD's own included.
+
 ### Look at it as a developer
 
 ```sh

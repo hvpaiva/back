@@ -41,6 +41,31 @@ crossplane_packages() {
       else error("some packages are not healthy: kubectl get providers,functions") end'
 }
 
+# Reloader only watches the namespaces it was given, and a service in any other one would keep
+# running with the Secret it started with.
+reloader() {
+  local watched kinds namespace missing=()
+  watched=$(kubectl --namespace reloader get deployment reloader-reloader \
+    --output jsonpath='{.spec.template.spec.containers[0].args}' |
+    jq -r '.[] | select(startswith("--namespaces=")) | ltrimstr("--namespaces=")')
+  if [[ -z $watched ]]; then
+    echo "watches every namespace in the cluster, Argo CD's and the platform's included"
+    return 0
+  fi
+  kinds=$(kubectl api-resources --api-group=back.lab --output name | paste -sd, -)
+  if [[ -n $kinds ]]; then
+    while IFS= read -r namespace; do
+      [[ -n $namespace && ",$watched," != *",$namespace,"* ]] && missing+=("$namespace")
+    done < <(kubectl get "$kinds" --all-namespaces \
+      --output jsonpath='{range .items[*]}{.metadata.namespace}{"\n"}{end}' | sort -u)
+  fi
+  if ((${#missing[@]} > 0)); then
+    echo "doesn't watch ${missing[*]}, where requests live: add them in platform/apps/reloader.yaml"
+    return 1
+  fi
+  echo "watches $watched"
+}
+
 hello() { # stage url
   curl -fsS "$2/api/info" | jq -er --arg stage "$1" --arg url "$2" '
     if .bucket and (.bucket.reachable | not) then error("in \($stage), does not reach its bucket \(.bucket.name)")
@@ -53,6 +78,7 @@ report localstack localstack
 report argocd argocd_server
 report headlamp headlamp
 report crossplane crossplane_packages
+report reloader reloader
 scripts/identities.sh check || problems=$((problems + 1))
 report hello hello staging http://hello.staging.localhost
 report hello hello production http://hello.localhost

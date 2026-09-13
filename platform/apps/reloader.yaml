@@ -4,6 +4,9 @@ kind: Application
 metadata:
   name: reloader
   namespace: argocd
+  annotations:
+    # Its Roles go in the services' namespaces, which the ApplicationSet creates in wave 2.
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   project: platform
   source:
@@ -15,6 +18,11 @@ spec:
         reloader:
           # The default strategy adds an env var to the pod template, which self-heal takes back out.
           reloadStrategy: annotations
+          # Watching every namespace means reading every Secret in the cluster, Argo CD's included.
+          watchGlobally: false
+          namespaces:
+            - hello-staging
+            - hello-production
   destination:
     server: https://kubernetes.default.svc
     namespace: reloader
