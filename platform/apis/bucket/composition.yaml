@@ -23,6 +23,11 @@ spec:
             {{- if hasPrefix (printf "%s-" $xr.metadata.name) $xr.metadata.namespace }}
               {{- $bucket = $xr.metadata.namespace }}
             {{- end }}
+            {{- /* A bucket that already exists keeps the name it was created with: S3 has no rename. */}}
+            {{- if .observed.resources }}
+              {{- $existing := dig "bucket" "resource" "metadata" "annotations" "crossplane.io/external-name" "" .observed.resources }}
+              {{- if $existing }}{{ $bucket = $existing }}{{ end }}
+            {{- end }}
             {{- $region := "us-east-1" }}
             ---
             apiVersion: s3.aws.m.upbound.io/v1beta1
