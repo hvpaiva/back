@@ -11,9 +11,23 @@ platform team would run in a real cluster.
 | A request stays *Progressing* and never turns ready | [the request](#the-request) |
 | The service starts but can't reach what it asked for | [the request](#the-request), then [LocalStack](#localstack) |
 | The page doesn't answer at all | [the service](#the-service) |
+| `just up` stops at `kind create cluster` | [the cluster](#the-cluster-wont-come-up) |
 
 Run everything from this directory: `mise.toml` points kubectl, the argocd CLI and the AWS CLI at
 the lab.
+
+## The cluster won't come up
+
+`kind create cluster` fails when something else holds port 80, 443 or 4566, usually another cluster
+or a container from another project. Docker names it without sudo:
+
+```sh
+docker ps --filter publish=80
+```
+
+`ss -ltnp` shows only `docker-proxy` for those ports, and needs sudo to show that much. Deleting
+another kind cluster has a catch: do it from outside this directory, or `KUBECONFIG` points at the
+lab's own file and the other cluster's context stays behind in `~/.kube/config`.
 
 ## The Application
 

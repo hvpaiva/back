@@ -45,13 +45,17 @@ the platform.
 
 ### Watch Git win
 
+Start the watch first, in another terminal: the Application has a watch of its own on what it
+manages, and it's quicker than a minute.
+
 ```sh
+kubectl -n hello-staging get deploy hello -w     # leave this running
 kubectl -n hello-staging scale deploy hello --replicas=3
-kubectl -n hello-staging get deploy hello -w
 ```
 
-Argo CD puts it back within a minute, because the Application self-heals. This is what makes the
-cluster a copy of Git rather than a place where things are decided.
+It's back to one replica in about a second, before the extra pods are ever available, and the
+Application's events say the sync was its own (`automated`). This is what makes the cluster a copy
+of Git rather than a place where things are decided.
 
 ### Break it on purpose
 

@@ -12,6 +12,8 @@ The root Application has a bootstrap problem of its own: it belongs to the `plat
 
 Argo CD creates a `default` project that allows everything, and an Application that names no project lands there. The lab closes it in `platform/apps/projects.yaml`, and every list has to be there, even the empty ones: the first apply to an object nobody applied before only changes the fields the manifest has. Left out, `clusterResourceWhitelist` would stay `*`.
 
+Applying it also warns every time, because Argo CD created the object without the annotation client-side apply keeps its copy in. `--server-side` trades that one warning for three, one per project, about the same annotation conflicting with Argo CD's own controller.
+
 ## A local cluster gets no webhooks
 
 Argo CD learns about new commits through a GitHub webhook or by polling. GitHub can't reach a cluster on a laptop, so the lab polls every minute (the default is up to three). The Refresh button in the UI, or `argocd app get <app> --refresh`, checks right away.
@@ -139,6 +141,10 @@ Sync waves order the resources of one Application, and Argo CD waits for each wa
 ## Drift is checked every ten minutes
 
 A provider compares each managed resource with the cloud every ten minutes by default, so a bucket deleted by hand comes back up to ten minutes later. The lab sets one minute (`--poll=1m`, in `platform/crossplane/providers.yaml`), which costs an API call per resource per minute: fine here, worth measuring with thousands of resources.
+
+## Traefik's chart warns about CRDs it doesn't ship
+
+`just up` prints a deprecation notice from the Traefik chart: the Gateway API CRDs will no longer be shipped, and it names a version older than the one running here. The chart ships none of them already, `helm show crds` lists only `traefik.io` and `hub.traefik.io`, and the justfile installs the Gateway API itself, at the version Traefik is built against.
 
 ## The argocd CLI and Traefik
 
