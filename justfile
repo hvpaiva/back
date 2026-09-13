@@ -17,6 +17,11 @@ export ARGOCD_OPTS := "--config " + justfile_directory() / ".argocd/config" + " 
 default:
     @just --list --unsorted
 
+# kind's error for an unreachable Docker daemon doesn't say that's what's wrong.
+[private]
+docker-ready:
+    @docker info >/dev/null 2>&1 || { echo "Docker isn't reachable here: ./setup.sh says what's missing" >&2; exit 1; }
+
 # Create the cluster, the base layer and Argo CD, then wait for Argo CD to deliver the rest (idempotent)
 up: preflight cluster gateway localstack argocd identities notifications wait check
 
@@ -25,7 +30,7 @@ preflight:
     @./setup.sh --check
 
 # Create the kind cluster (skipped if it already exists)
-cluster:
+cluster: docker-ready
     @mkdir -p .kube
     @kind get clusters 2>/dev/null | grep -qx {{cluster_name}} || kind create cluster --config cluster/kind.yaml
     @kind export kubeconfig --name {{cluster_name}}
@@ -108,6 +113,6 @@ check:
 
 # Delete the cluster and everything in it
 [confirm("Delete the 'back' kind cluster and everything in it? [y/N]")]
-down:
+down: docker-ready
     kind delete cluster --name {{cluster_name}}
     @scripts/identities.sh remove
