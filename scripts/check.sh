@@ -59,6 +59,14 @@ crossview() {
   echo "http://crossview.localhost"
 }
 
+# Its page answers before it can reach the cloud account, and the lab gives it no way to write there.
+stackport() {
+  curl -fsS http://stackport.localhost/api/health |
+    jq -er 'if .status != "ok" then error("its API answered \(.status)")
+            elif .writes_enabled then error("it can write to the cloud account: STACKPORT_ALLOW_WRITES in platform/stackport")
+            else "http://stackport.localhost (read-only)" end'
+}
+
 crossplane_packages() {
   kubectl get providers.pkg.crossplane.io,functions.pkg.crossplane.io --output json | jq -er '.items
     | if length > 0 and all(any(.status.conditions[]?; .type == "Healthy" and .status == "True"))
@@ -103,6 +111,7 @@ report cloud cloud
 report argocd argocd_server
 report headlamp headlamp
 report crossview crossview
+report stackport stackport
 report crossplane crossplane_packages
 report reloader reloader
 scripts/identities.sh check || problems=$((problems + 1))

@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stackport
+  namespace: stackport
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stackport
+  template:
+    metadata:
+      labels:
+        app: stackport
+    spec:
+      # Kubernetes would otherwise set STACKPORT_PORT to this Service's address, and the app reads
+      # that name as its own port.
+      enableServiceLinks: false
+      containers:
+        - name: stackport
+          image: davireis/stackport:0.4.2@sha256:2b346e93aa8b6746b0e5c9ac25f3c12840f132fd591f6133d3141ab3591c2974
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: AWS_ENDPOINT_URL
+              value: http://aws.cloud.svc:4566
+            - name: AWS_ACCESS_KEY_ID
+              value: test
+            - name: AWS_SECRET_ACCESS_KEY
+              value: test
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: STACKPORT_ALLOW_WRITES
+              value: "false"
+            - name: STACKPORT_LEARN
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stackport
+  namespace: stackport
+spec:
+  selector:
+    app: stackport
+  ports:
+    - port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stackport
+  namespace: stackport
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: stackport.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stackport
+                port:
+                  number: 80

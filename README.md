@@ -58,7 +58,7 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 | Crossview | http://crossview.localhost (the requests, what each composed, and the providers behind them) |
 | hello | http://hello.staging.localhost and http://hello.localhost |
 | Traefik | http://traefik.localhost/dashboard/ |
-| The cloud account | http://localhost:4566 (`aws s3 ls` from this directory lists its buckets) |
+| The cloud account | http://stackport.localhost (what the platform created in it), or `aws s3 ls` from this directory |
 | Crossplane | Crossview, above, or `kubectl get providers,functions` |
 
 `just` lists every recipe, and `just down` deletes the cluster. The lab uses about 5 GB of RAM and 8 GB of disk.

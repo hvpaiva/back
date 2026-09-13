@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stackport
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/hvpaiva/back.git
+    targetRevision: main
+    path: platform/stackport
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stackport
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
