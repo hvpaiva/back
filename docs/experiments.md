@@ -22,6 +22,12 @@ queue and the dead-letter queue messages land in after five failed deliveries) a
 what a service would read. `kubectl -n hello-staging delete queues.back.lab emails` takes all of it
 back.
 
+The trace names both queues, `emails` and `emails-dlq`, and the Secret only appears once both have a
+URL: the first trace shows the tree without it, and the dead-letter rule lands one reconcile later,
+when the queue has an ARN to point at. Argo CD shows none of this, since nothing in Git asked for
+the request and no project here tracks resources nobody asked for. Headlamp lists it with the
+cluster's other custom resources.
+
 No service uses that one. `Bucket` is the only request the chart renders today, from `bucket:` in a
 service's values; the others exist so the platform offers more than one kind of thing.
 

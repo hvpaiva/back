@@ -110,6 +110,8 @@ To read a bucket's tags, the provider calls S3 Control at `<account-id>.<endpoin
 
 Crossplane's `crossplane.io/external-name` annotation says what a managed resource is called in the cloud, and for an S3 bucket that's the bucket's name. SQS identifies a queue by its URL instead, so the provider overwrote the annotation with the URL it got back, and the queues, which set no `name`, came up called `terraform-1ac4f3bd49da...`: the random name the Terraform provider these are generated from picks. The Queue Composition names them in a field, `forProvider.name`. Which of the two a resource uses is in the provider's external-name configuration, not in its schema.
 
+The two queues also carry a `metadata.name` of their own, the request's and the request's plus `-dlq`, so a trace says which is which instead of showing two generated names.
+
 ## Unquoted, N is false
 
 A DynamoDB key is typed with a single letter: S, N or B. Written into a Composition's template without quotes, `type: N` reached the provider as the boolean `false`, because the YAML parser reads a bare N that way. `crossplane resource validate`, run against the provider's schema, caught it as "must be of type string". Anything a template writes that could be read as a boolean or a number needs quoting.

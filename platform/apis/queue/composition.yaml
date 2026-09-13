@@ -29,6 +29,7 @@ spec:
             apiVersion: sqs.aws.m.upbound.io/v1beta1
             kind: Queue
             metadata:
+              name: {{ $xr.metadata.name }}-dlq
               annotations:
                 {{ setResourceNameAnnotation "dead-letter" }}
             spec:
@@ -44,6 +45,7 @@ spec:
             apiVersion: sqs.aws.m.upbound.io/v1beta1
             kind: Queue
             metadata:
+              name: {{ $xr.metadata.name }}
               annotations:
                 {{ setResourceNameAnnotation "queue" }}
             spec:
