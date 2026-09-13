@@ -126,22 +126,29 @@ just render cache                                  # what it would create, check
 just diff apis                                     # what applying the folder would change in the cluster
 just local apis                                    # apply platform/apis/ from here, not from Git
 kubectl apply -f platform/apis/cache/example.yaml
-kubectl -n hello-staging logs deploy/sessions-cache | grep -m1 version=
-just gitops                                        # hand it back to Git
+kubectl -n hello-staging wait --for=condition=ready caches.back.lab/sessions
 kubectl -n hello-staging logs deploy/sessions-cache | grep -m1 version=
 ```
 
 `cache` there is the folder under `platform/apis/`, and `apis` is the Argo CD Application that
-delivers all of them (`kubectl -n argocd get applications` lists the rest).
+delivers all of them (`kubectl -n argocd get applications` lists the rest). Waiting on the request is
+the platform's own contract: it's ready when what it composed is, which the first time round includes
+pulling an image nobody here had asked for before.
 
-The first of those two lines names Redis and the second names Valkey. Between them the Secret keeps
-its keys, the Service keeps its address, and anything reading them notices nothing: that's what an
-API buys over a template. `just local` pauses Argo CD's enforcement for that folder and for the root
-Application that would restore it, so while it's on, the cluster and Git disagree on purpose.
+That line names Redis. `just local` pauses Argo CD's enforcement for that folder and for the root
+Application that would restore it, so while it's on, the cluster and Git disagree on purpose. Handing
+it back is the half worth watching, because the request never stops being the same request:
 
-The last line is the one worth waiting for. `just gitops` hands the folder back, and the request,
-still the same request and still running, is a Valkey server again seconds later, because that's
-what Git says it is. Then clean up after yourself:
+```sh
+just gitops                                        # hand it back to Git
+kubectl -n hello-staging get pods -w               # a new pod some fifteen seconds later, then Ctrl-C
+kubectl -n hello-staging logs deploy/sessions-cache | grep -m1 version=
+```
+
+Now it names Valkey. `just gitops` returns well before any of that: Argo CD has to notice Git again,
+Crossplane has to write the Deployment back, and the pod has to be replaced. Across both log lines
+the Secret keeps its keys, the Service keeps its address, and anything reading them notices nothing:
+that's what an API buys over a template. Then clean up after yourself:
 
 ```sh
 kubectl -n hello-staging delete caches.back.lab sessions
@@ -175,10 +182,10 @@ learns something that stopped being true.
 
 An API also says no, and it's worth hearing it say so. Put a policy that isn't in the list into the
 example request and the render stops at the schema, before a cluster is involved. `Queue` refuses
-something else: a change it can't make to a queue that already exists (ask for the queue first, if
-you took it back earlier).
+something else: a change it can't make to a queue that already exists.
 
 ```sh
+kubectl apply -f platform/apis/queue/example.yaml
 kubectl -n hello-staging patch queues.back.lab emails --type merge -p '{"spec":{"fifo":true}}'
 ```
 

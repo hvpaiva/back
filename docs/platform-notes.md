@@ -67,10 +67,11 @@ disk, which here means `apis`, `rbac` and `root`. Everything else changes by pus
 `just local` says which it is.
 
 The CLI also warns that a local diff without `--server-side-generate` is deprecated, and that flag
-doesn't work here: the server rejects the upload as a checksum mismatch for an empty archive
-(`calc e3b0c442…`, the hash of nothing), with or without `--local-repo-root`. Sending the folder to
-the server is a gRPC stream, and the lab reaches Argo CD as grpc-web over plain HTTP through Traefik.
-Until that combination works, the warning is what the loop costs.
+doesn't work here. The folder travels as a gRPC stream, and the repo server, which is what checks it,
+reports a checksum for an empty archive where the CLI declared a full one (`calc e3b0c442…`, the hash
+of nothing). The same failure comes back through Traefik and through a port-forward, as grpc-web and
+as plain gRPC, with and without `--local-repo-root`, so it isn't the transport. Until it works, the
+warning is what the loop costs.
 
 ## Letting teams create their namespaces
 
