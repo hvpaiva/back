@@ -15,6 +15,8 @@ fail() {
   problems=$((problems + 1))
 }
 hint() { printf '        %s\n' "$1"; }
+# What a tool printed, under the line that says it failed. Its last line may not end with a newline.
+details() { while IFS= read -r line || [[ -n $line ]]; do hint "$line"; done; }
 
 # Everything the commands below print, one run appended after the last.
 lab_log=.logs/lab.log
@@ -22,15 +24,15 @@ lab_log=.logs/lab.log
 # The command behind a step, dim and wrapped over as many lines as it takes: a step is worth reading
 # as the thing it actually runs, and cutting it short would leave out the flags that say what it does.
 command_line() { # command...
-  local width i marker='$' continuation lines=()
+  local width i arg marker='$' continuation lines=() quoted=()
   width=$(($(tput cols 2>/dev/null || echo 80) - 10))
-  # Only ever break between arguments: a URL split down the middle reads like a typo.
-  mapfile -t lines < <(printf '%q ' "$@" | awk -v width="$width" '
-    { for (i = 1; i <= NF; i++) {
-        if (line == "") { line = $i }
-        else if (length(line) + 1 + length($i) <= width) { line = line " " $i }
-        else { print line; line = $i }
-      } }
+  for arg in "$@"; do quoted+=("$(printf '%q' "$arg")"); done
+  # One quoted argument per line, so a break only ever lands between two of them: an argument with a
+  # space in it, or a URL, would otherwise be split down the middle and stop being pasteable.
+  mapfile -t lines < <(printf '%s\n' "${quoted[@]}" | awk -v width="$width" '
+    { if (line == "") { line = $0 }
+      else if (length(line) + 1 + length($0) <= width) { line = line " " $0 }
+      else { print line; line = $0 } }
     END { if (line != "") print line }')
   for i in "${!lines[@]}"; do
     continuation=''
@@ -66,7 +68,7 @@ run() { # label command...
     ok "$label"
   else
     fail "$label"
-    while IFS= read -r line || [[ -n $line ]]; do hint "$line"; done <"$log"
+    details <"$log"
     hint "this run, and the ones before it: $lab_log"
   fi
   rm -f "$log"

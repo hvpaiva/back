@@ -98,13 +98,14 @@ case ${1:-issue} in
   login)
     user=${2:-platform-admin}
     section "Argo CD"
-    if argocd login argocd.localhost:80 --skip-test-tls --name "$user" --username "$user" \
+    if said=$(argocd login argocd.localhost:80 --skip-test-tls --name "$user" --username "$user" \
       --password "$(kubectl --namespace argocd get secret argocd-account-passwords \
-        --output jsonpath="{.data.$user}" | base64 --decode)" >/dev/null 2>&1; then
+        --output jsonpath="{.data.$user}" | base64 --decode)" 2>&1); then
       ok "the argocd CLI is $user now, in a context of that name"
       hint "switch with just argocd-login <user>: argocd context can't, with the lab's own config"
     else
       fail "$user couldn't log in to Argo CD"
+      details <<<"$said"
       hint "just identities issues the accounts and their passwords"
       exit 1
     fi

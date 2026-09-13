@@ -12,10 +12,15 @@ source scripts/lib.sh
 
 # The CLI keeps its login in .argocd/, and only platform-admin may change an Application.
 login() {
+  local said
   argocd account get-user-info --output json 2>/dev/null | jq -e '.loggedIn' >/dev/null && return
-  argocd login argocd.localhost:80 --skip-test-tls --name platform-admin --username platform-admin \
-    --password "$(kubectl --namespace argocd get secret argocd-account-passwords \
-      --output jsonpath='{.data.platform-admin}' | base64 --decode)" >/dev/null
+  if ! said=$(argocd login argocd.localhost:80 --skip-test-tls --name platform-admin \
+    --username platform-admin --password "$(kubectl --namespace argocd get secret \
+      argocd-account-passwords --output jsonpath='{.data.platform-admin}' | base64 --decode)" 2>&1); then
+    fail "platform-admin couldn't log in to Argo CD"
+    details <<<"$said"
+    exit 1
+  fi
 }
 
 # Applications whose last sync came from a folder: Argo CD keeps comparing them against it, not Git.
