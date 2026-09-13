@@ -18,6 +18,12 @@ login() {
       --output jsonpath='{.data.platform-admin}' | base64 --decode)" >/dev/null
 }
 
+# Applications whose last sync came from a folder: Argo CD keeps comparing them against it, not Git.
+pinned_to_disk() {
+  kubectl --namespace argocd get applications --output json |
+    jq -r '.items[] | select(((.status.operationState.operation.sync.manifests // []) | length) > 0) | .metadata.name'
+}
+
 # The folder of this repository an Application delivers, when Argo CD can sync it from disk at all:
 # that takes one source pointing at a path here. Messages go to stderr: the caller reads stdout.
 source_path() { # app
@@ -75,6 +81,13 @@ case ${1:-} in
     # refuses while an operation of its own is still running, and that's fine: self-heal gets there.
     argocd app sync root >/dev/null 2>&1 || true
     ok "root follows Git again, and the Applications it manages follow within a minute"
+    while IFS= read -r app; do
+      if argocd app sync "$app" >/dev/null 2>&1; then
+        ok "$app compares against Git again, not against a folder"
+      else
+        warn "$app still compares against a folder on disk: argocd app sync $app"
+      fi
+    done < <(pinned_to_disk)
     hint "anything you applied from disk that Git doesn't have stays until you delete it"
     ;;
   *)
