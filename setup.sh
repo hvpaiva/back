@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks that this machine is ready for the lab and offers to fix what's missing.
-# Tested on Ubuntu 24.04, the only system where it also installs system packages (apt, Docker).
-# Every change asks first: apt, sudo, your shell rc, mise installs.
+# Installs system packages on Ubuntu (apt) and Arch (pacman); on any other system it only checks.
+# Every change asks first: packages, sudo, your shell rc, mise installs.
 #
 #   ./setup.sh           check everything and offer to fix what's missing
 #   ./setup.sh --yes     same, answering yes to every question
@@ -25,6 +25,8 @@ ports=(80 443 4566)         # host ports mapped in cluster/kind.yaml
 min_ram_gib=8
 min_disk_gib=10
 me=$(id -un)
+family=''      # ubuntu or arch, from /etc/os-release: the systems this script installs packages on
+pkg_manager='' # how that family installs them
 
 # --- Output, prompts, privileges ---------------------------------------------
 
@@ -61,6 +63,23 @@ apt_install() {
     as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null
 }
 
+# Never syncs or upgrades: `pacman -Sy` on its own sets up a partial upgrade that breaks the machine
+# later, and `-Syu` would upgrade all of it, which isn't a lab's business.
+pacman_install() {
+  as_root pacman -S --needed --noconfirm "$@" >/dev/null && return 0
+  hint "pacman couldn't install $*: if its database is too old, run 'sudo pacman -Syu' and try again"
+  return 1
+}
+
+# Installs system packages the way this family does, and fails where the script doesn't know how.
+pkg_install() {
+  case $family in
+    ubuntu) apt_install "$@" ;;
+    arch) pacman_install "$@" ;;
+    *) return 1 ;;
+  esac
+}
+
 # --- System ------------------------------------------------------------------
 
 section "System"
@@ -68,14 +87,18 @@ section "System"
 if [[ -r /etc/os-release ]]; then . /etc/os-release; fi
 system_name=${PRETTY_NAME:-$(uname -sr)}
 if [[ -z ${PRETTY_NAME:-} ]] && command -v sw_vers >/dev/null; then system_name="macOS $(sw_vers -productVersion)"; fi
-is_ubuntu=false
-if [[ ${ID:-} == ubuntu ]]; then is_ubuntu=true; fi
-if $is_ubuntu && [[ ${VERSION_ID:-} == 24.04 ]]; then
+# ID_LIKE brings the derivatives along: Mint and Pop!_OS install from Ubuntu's repositories,
+# EndeavourOS and Manjaro from Arch's.
+case " ${ID:-} ${ID_LIKE:-} " in
+  *" ubuntu "*) family=ubuntu pkg_manager=apt ;;
+  *" arch "*) family=arch pkg_manager=pacman ;;
+esac
+if [[ ${ID:-} == arch ]] || [[ ${ID:-} == ubuntu && ${VERSION_ID:-} == 24.04 ]]; then
   ok "$system_name"
-elif $is_ubuntu; then
-  warn "$system_name: the lab is tested on Ubuntu 24.04"
+elif [[ -n $family ]]; then
+  warn "$system_name: the lab is tested on Ubuntu 24.04 and Arch"
 else
-  warn "$system_name: the lab is tested on Ubuntu 24.04; install system packages (curl, git, OpenSSL, Docker) yourself"
+  warn "$system_name: the lab is tested on Ubuntu 24.04 and Arch; install system packages (curl, git, OpenSSL, Docker) yourself"
 fi
 
 # --- Base tools --------------------------------------------------------------
@@ -86,7 +109,7 @@ for tool in curl git openssl; do
   if command -v "$tool" >/dev/null; then ok "$tool"; else missing+=("$tool"); fi
 done
 if ((${#missing[@]} > 0)); then
-  if $is_ubuntu && can_sudo && ask "Install ${missing[*]} with apt?" && apt_install "${missing[@]}"; then
+  if [[ -n $family ]] && can_sudo && ask "Install ${missing[*]} with $pkg_manager?" && pkg_install "${missing[@]}"; then
     ok "${missing[*]} installed"
   else
     fail "missing: ${missing[*]}"
@@ -98,7 +121,7 @@ fi
 section "Docker"
 
 # Docker Engine from Docker's own apt repository, as in https://docs.docker.com/engine/install/ubuntu/
-install_docker() {
+install_docker_ubuntu() {
   apt_install ca-certificates curl &&
     as_root install -m 0755 -d /etc/apt/keyrings &&
     as_root curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc &&
@@ -113,6 +136,34 @@ install_docker() {
     as_root tee /etc/apt/sources.list.d/docker.sources >/dev/null &&
     apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin &&
     { ((EUID == 0)) || as_root usermod -aG docker "$me"; }
+}
+
+# Arch ships Docker itself. Installing it doesn't start its daemon, which the next section offers to.
+install_docker_arch() {
+  pacman_install docker &&
+    { ((EUID == 0)) || as_root usermod -aG docker "$me"; }
+}
+
+install_docker() {
+  case $family in
+    ubuntu) install_docker_ubuntu ;;
+    arch) install_docker_arch ;;
+    *) return 1 ;;
+  esac
+}
+case $family in
+  ubuntu) docker_source="from Docker's apt repository" ;;
+  arch) docker_source="from Arch's repositories" ;;
+  *) docker_source='' ;;
+esac
+
+# podman-docker installs /usr/bin/docker as a script that runs podman instead. kind can drive podman,
+# but only when told to (KIND_EXPERIMENTAL_PROVIDER=podman), and nothing here is tested that way.
+docker_is_podman() {
+  local bin
+  bin=$(readlink -f "$(command -v docker)") || return 1
+  [[ $bin == *podman* ]] && return 0
+  [[ $(head -c 2 "$bin" 2>/dev/null) == '#!' ]] && grep -qi podman "$bin"
 }
 
 # Prints one of: missing, not-running, no-permission, ok
@@ -132,8 +183,11 @@ in_docker_group() { id -nG "$me" | tr ' ' '\n' | grep -qx docker; }
 has_systemd() { command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; }
 
 state=$(docker_state)
-if [[ $state == missing ]] && $is_ubuntu && can_sudo &&
-  ask "Docker isn't installed. Install Docker Engine from Docker's apt repository and add $me to the docker group?"; then
+if [[ $state != missing ]] && docker_is_podman; then
+  warn "docker here runs podman: the lab is tested with Docker Engine, and kind uses podman only with KIND_EXPERIMENTAL_PROVIDER=podman"
+fi
+if [[ $state == missing ]] && [[ -n $family ]] && can_sudo &&
+  ask "Docker isn't installed. Install Docker Engine $docker_source and add $me to the docker group?"; then
   if install_docker; then ok "Docker Engine installed"; else fail "Docker Engine installation failed (see above)"; fi
   state=$(docker_state)
 fi
@@ -151,11 +205,16 @@ docker_ok=false
 case $state in
   ok)
     docker_ok=true
-    ok "Docker $(docker version --format '{{.Server.Version}}') is running"
+    # Version and storage driver in one call; podman's shim knows neither field, and said so above.
+    ok "$(docker info --format 'Docker {{.ServerVersion}} is running ({{.Driver}})' 2>/dev/null || docker --version)"
     ;;
   missing)
     fail "Docker isn't installed"
-    if $is_ubuntu; then hint "https://docs.docker.com/engine/install/ubuntu/"; else hint "https://docs.docker.com/get-started/get-docker/"; fi
+    case $family in
+      ubuntu) hint "https://docs.docker.com/engine/install/ubuntu/" ;;
+      arch) hint "sudo pacman -S --needed docker, then sudo systemctl enable --now docker" ;;
+      *) hint "https://docs.docker.com/get-started/get-docker/" ;;
+    esac
     ;;
   not-running)
     fail "the Docker daemon isn't running"
@@ -286,6 +345,17 @@ else
       warn "mise isn't active in this shell: use 'mise exec -- just up', or activate it with:"
       hint "$activate_line"
     fi
+
+    # mise.toml's [env] is what keeps the tools on the lab: without it, kubectl reads your own
+    # kubeconfig and the AWS CLI your own credentials.
+    shadowed=()
+    for tool in kubectl helm argocd aws; do
+      tool_path=$(command -v "$tool") || continue
+      [[ $tool_path == *"/mise/"* ]] || shadowed+=("$tool")
+    done
+    if ((${#shadowed[@]} > 0)); then
+      warn "${shadowed[*]} come from the system in this shell, not from mise: run them with 'mise exec --'"
+    fi
   fi
 fi
 
@@ -294,7 +364,7 @@ fi
 section "Summary"
 if ((problems > 0)); then
   printf '  %sProblems found: %d. See above.%s\n' "$red" "$problems" "$reset"
-  if [[ $mode == check ]] && $is_ubuntu; then hint "./setup.sh can fix most of them"; fi
+  if [[ $mode == check && -n $family ]]; then hint "./setup.sh can fix most of them"; fi
   exit 1
 fi
 if [[ $mode == check ]]; then

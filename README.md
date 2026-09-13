@@ -40,7 +40,7 @@ One thing doesn't bend: a change to `charts/app` reaches the cluster by push. Ar
 
 ## Run it
 
-Tested on Ubuntu 24.04, where `setup.sh` also installs what's missing. On other systems it runs the same checks and tells you what to install.
+Tested on Ubuntu 24.04 and Arch, where `setup.sh` also installs what's missing. On other systems it runs the same checks and tells you what to install.
 
 ```sh
 git clone https://github.com/hvpaiva/back.git && cd back
