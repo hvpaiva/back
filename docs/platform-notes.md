@@ -73,6 +73,23 @@ of nothing). The same failure comes back through Traefik and through a port-forw
 as plain gRPC, with and without `--local-repo-root`, so it isn't the transport. Until it works, the
 warning is what the loop costs.
 
+## A wave orders one Application, not what another one creates
+
+Sync waves order the resources of a single sync, and between waves Argo CD waits for what it just
+applied to become healthy. Root uses that to bring the platform up in order, and it works where there
+is health to wait for: it sat on `Application/apis` for thirty seconds while Crossplane settled. An
+ApplicationSet has no health at all, so the wave holding it was over in under a second, and the
+Applications it generates sync on their own time, after root has already finished.
+
+Reloader is where that shows. Its chart puts a Role in each namespace it watches, and those
+namespaces belong to the services' own Applications, which root never waited for. On a cluster built
+from scratch the namespaces and Reloader's first sync landed in the same second and it won. When it
+loses, two RBAC objects report `SyncFailed` with `namespaces "hello-staging" not found`, and the
+Application then calls itself Healthy while staying OutOfSync, which is the part worth knowing. It
+syncs cleanly about eight seconds after the namespace appears, with or without a retry policy,
+because the sync operation never ends in failure: it keeps re-attempting. `just up` names it while
+that lasts, instead of looking slow.
+
 ## Letting teams create their namespaces
 
 Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.
