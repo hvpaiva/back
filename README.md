@@ -5,7 +5,7 @@
 
 A local lab where Backstage, Argo CD, Crossplane and Kyverno are already wired together as an internal developer platform: ship a service the way a developer would, and change the APIs, the chart and the pipelines that made it that easy.
 
-Everything runs on your machine, in a kind cluster, with LocalStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
+Everything runs on your machine, in a kind cluster, with MiniStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
 
 > Work in progress: Argo CD, the delivery path for services and the first platform APIs (buckets, queues, tables and caches, through Crossplane) are in place; databases, Kyverno and Backstage are being added.
 
@@ -58,7 +58,7 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 | Crossview | http://crossview.localhost (the requests, what each composed, and the providers behind them) |
 | hello | http://hello.staging.localhost and http://hello.localhost |
 | Traefik | http://traefik.localhost/dashboard/ |
-| LocalStack | http://localhost:4566 (`aws s3 ls` from this directory lists its buckets) |
+| The cloud account | http://localhost:4566 (`aws s3 ls` from this directory lists its buckets) |
 | Crossplane | Crossview, above, or `kubectl get providers,functions` |
 
 `just` lists every recipe, and `just down` deletes the cluster. The lab uses about 5 GB of RAM and 8 GB of disk.
@@ -80,7 +80,7 @@ Two perspectives on the same cluster, each with an identity to see it through: `
 
 ### The platform behind it
 
-Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs: a service's request for a bucket becomes an S3 bucket in LocalStack, with the platform's defaults. As `platform-admin`, you see all of it.
+Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs: a service's request for a bucket becomes an S3 bucket in the lab's cloud account, with the platform's defaults. As `platform-admin`, you see all of it.
 
 ```mermaid
 flowchart LR
@@ -92,7 +92,7 @@ flowchart LR
     argocd -- applies --> cluster["kind cluster<br/>hello-staging<br/>hello-production"]
     ghcr -- "image" --> cluster
     cluster -- "requests a bucket" --> crossplane[Crossplane]
-    crossplane -- "creates it" --> localstack[(LocalStack)]
+    crossplane -- "creates it" --> cloud[(MiniStack)]
 ```
 
 [How it works](docs/how-it-works.md) follows both sides in detail, from the push to the running pods.
@@ -130,12 +130,12 @@ Argo CD can report each deployment back to GitHub: the deployed commit gets an `
 
 In this repository:
 
-- `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account (LocalStack). `just` installs it.
-- `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, CloudNativePG, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages, its permissions and its connection to LocalStack, and `platform/crossview/` the read access the UI over it runs with; `platform/apis/` holds the APIs services request resources through, each with the example request `just render` and `kubectl apply` take; `platform/rbac/` says what each team can see.
+- `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account (MiniStack, standing in for AWS). `just` installs it.
+- `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, CloudNativePG, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages, its permissions and its connection to the cloud account, and `platform/crossview/` the read access the UI over it runs with; `platform/apis/` holds the APIs services request resources through, each with the example request `just render` and `kubectl apply` take; `platform/rbac/` says what each team can see.
 - `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls: `go.yaml` checks Go services, `delivery.yaml` validates and ships any service.
 - `scripts/` holds what the longer `just` recipes run.
 - `docs/` explains [how it works](docs/how-it-works.md), suggests [things to try](docs/experiments.md), gives the order to look in [when something doesn't work](docs/troubleshooting.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
 
 ## Isolation
 
-Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at the lab cluster only, and keeps their credentials in git-ignored folders here rather than in your home directory. AWS calls go to LocalStack with dummy credentials, even if real AWS profiles are configured, and so do those of Crossplane's AWS provider in the cluster. Host ports are bound to 127.0.0.1, so nothing is reachable from your network.
+Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at the lab cluster only, and keeps their credentials in git-ignored folders here rather than in your home directory. AWS calls go to the lab's cloud account with dummy credentials, even if real AWS profiles are configured, and so do those of Crossplane's AWS provider in the cluster. Host ports are bound to 127.0.0.1, so nothing is reachable from your network.

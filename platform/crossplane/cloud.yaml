@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: localstack-credentials
+  name: cloud-credentials
   namespace: crossplane-system
 stringData:
   credentials: |
@@ -20,15 +20,15 @@ spec:
     source: Secret
     secretRef:
       namespace: crossplane-system
-      name: localstack-credentials
+      name: cloud-credentials
       key: credentials
   endpoint:
-    # Only these services go to LocalStack; any other would go to AWS itself.
+    # Only these services go to the lab's cloud account; any other would go to AWS itself.
     services: [s3, s3control, sqs, dynamodb]
     hostnameImmutable: true
     url:
       type: Static
-      static: http://localstack.localstack.svc:4566
+      static: http://aws.cloud.svc:4566
   skip_credentials_validation: true
   skip_metadata_api_check: true
   skip_requesting_account_id: true

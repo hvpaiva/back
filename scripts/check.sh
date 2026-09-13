@@ -21,8 +21,8 @@ gateway() {
   curl -fsS -o /dev/null http://traefik.localhost/dashboard/ && echo "http://traefik.localhost/dashboard/"
 }
 
-localstack() {
-  curl -fsS http://localhost:4566/_localstack/health | jq -er '"\(.edition) \(.version), http://localhost:4566"'
+cloud() {
+  curl -fsS http://localhost:4566/health | jq -er '"ministack \(.version) (\(.edition)), http://localhost:4566"'
 }
 
 argocd_server() {
@@ -99,7 +99,7 @@ hello() { # stage url
 
 section "Checking the lab"
 report gateway gateway
-report localstack localstack
+report cloud cloud
 report argocd argocd_server
 report headlamp headlamp
 report crossview crossview

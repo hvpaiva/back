@@ -74,7 +74,7 @@ spec:
               QUEUE_URL: {{ $url }}
               DEAD_LETTER_QUEUE_URL: {{ $deadLetterUrl }}
               AWS_REGION: {{ $region }}
-              AWS_ENDPOINT_URL: http://localstack.localstack.svc:4566
+              AWS_ENDPOINT_URL: http://aws.cloud.svc:4566
               AWS_ACCESS_KEY_ID: test
               AWS_SECRET_ACCESS_KEY: test
             {{- end }}

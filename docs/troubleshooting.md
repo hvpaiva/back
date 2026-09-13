@@ -9,7 +9,7 @@ platform team would run in a real cluster.
 | A change was pushed and nothing happened | [the Application](#the-application) |
 | *Synced*, but the service still runs the old version | [the Application](#the-application), then [the service](#the-service) |
 | A request stays *Progressing* and never turns ready | [the request](#the-request) |
-| The service starts but can't reach what it asked for | [the request](#the-request), then [LocalStack](#localstack) |
+| The service starts but can't reach what it asked for | [the request](#the-request), then [the cloud account](#the-cloud-account) |
 | The page doesn't answer at all | [the service](#the-service) |
 | `just up` stops at `kind create cluster` | [the cluster](#the-cluster-wont-come-up) |
 
@@ -77,9 +77,9 @@ If the request produced nothing at all, the Composition itself failed. Crossplan
 the request (`kubectl -n hello-staging describe buckets.back.lab hello`), and `just render bucket`
 reproduces it on your machine, without the cluster.
 
-## LocalStack
+## The cloud account
 
-The provider's view and LocalStack's view can disagree, and LocalStack keeps its state in memory:
+The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory:
 restart it and every bucket, queue and table is gone, while Crossplane still believes they exist.
 It notices within a minute and creates them again.
 
@@ -87,7 +87,7 @@ It notices within a minute and creates them again.
 aws s3 ls
 aws sqs list-queues
 aws dynamodb list-tables
-curl -s localhost:4566/_localstack/health | jq
+curl -s localhost:4566/health | jq
 ```
 
 ## The service

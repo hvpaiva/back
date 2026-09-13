@@ -1,0 +1,55 @@
+# MiniStack stands in for AWS. Its state is in memory: a restart wipes every resource, and
+# Crossplane creates them again within a minute.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloud
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aws
+  namespace: cloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aws
+  template:
+    metadata:
+      labels:
+        app: aws
+    spec:
+      containers:
+        - name: ministack
+          image: ministackorg/ministack:1.5.11@sha256:cd4ac9bc91f7954b476dcdfdd46e3c5750c599f525660e4a42f6769e687e6af0
+          ports:
+            - name: edge
+              containerPort: 4566
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: edge
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+---
+# aws.cloud.svc:4566 in the cluster, localhost:4566 on the host.
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws
+  namespace: cloud
+spec:
+  type: NodePort
+  selector:
+    app: aws
+  ports:
+    - name: edge
+      port: 4566
+      targetPort: edge
+      nodePort: 31566

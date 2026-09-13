@@ -14,7 +14,7 @@ data:
         }
         ready
         rewrite stop {
-            name regex ^[0-9]+\.localstack\.localstack\.svc\.cluster\.local\.$ localstack.localstack.svc.cluster.local.
+            name regex ^[0-9]+\.aws\.cloud\.svc\.cluster\.local\.$ aws.cloud.svc.cluster.local.
             answer auto
         }
         kubernetes cluster.local in-addr.arpa ip6.arpa {

@@ -73,7 +73,7 @@ Services call them at `main`, so a fix reaches all of them at once.
 
 ### Crossplane and the platform's APIs
 
-`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS providers for S3, SQS and DynamoDB, and their connection to LocalStack. The S3 provider alone ships 50 resource types; Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`.
+`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS providers for S3, SQS and DynamoDB, and their connection to the cloud account. The S3 provider alone ships 50 resource types; Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`.
 
 `platform/apis/` holds the APIs services request resources through, all in `back.lab/v1alpha1` and all namespaced:
 

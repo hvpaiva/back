@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # The layer `just up` installs before Argo CD takes over, in the order it installs them: the cluster,
-# the Gateway API and Traefik, LocalStack, and Argo CD's own first install. Each step reports one
+# the Gateway API and Traefik, the cloud account, and Argo CD's own first install. Each step reports one
 # line, and keeps the tool's output for when it fails.
 #
 #   scripts/base.sh cluster      the kind cluster, with kubectl pointed at it (just cluster)
 #   scripts/base.sh gateway      the Gateway API CRDs and Traefik (just gateway)
-#   scripts/base.sh localstack   LocalStack and the DNS rule it needs (just localstack)
+#   scripts/base.sh cloud        the cloud account and the DNS rule it needs (just cloud)
 #   scripts/base.sh argocd       Argo CD, its projects and the root Application (just argocd)
 #   scripts/base.sh down         delete the cluster and the lab's contexts (just down)
 set -Eeuo pipefail
@@ -23,7 +23,7 @@ argocd_chart_version=10.8.4
 case ${1:-} in
   plan)
     section "Bringing the lab up"
-    hint "this machine, the cluster, Traefik, LocalStack, Argo CD, the identities and notifications,"
+    hint "this machine, the cluster, Traefik, the cloud account, Argo CD, the identities and notifications,"
     hint "then waiting for Argo CD to deliver the platform and checking it answers: about four minutes"
     hint "what each step's own commands print goes to .logs/lab.log, run after run"
     ;;
@@ -47,13 +47,13 @@ case ${1:-} in
       helm upgrade --install traefik oci://ghcr.io/traefik/helm/traefik --version "$traefik_chart_version" \
       --namespace traefik --create-namespace --values cluster/traefik-values.yaml --wait || exit 1
     ;;
-  localstack)
-    section "LocalStack"
-    run "LocalStack" kubectl apply --filename cluster/localstack.yaml || exit 1
+  cloud)
+    section "The cloud account"
+    run "the emulator standing in for AWS" kubectl apply --filename cluster/cloud.yaml || exit 1
     run "DNS for its S3 Control endpoint" \
       kubectl apply --server-side --force-conflicts --filename cluster/coredns.yaml || exit 1
-    run "LocalStack answering" \
-      kubectl --namespace localstack rollout status deployment/localstack --timeout=5m || exit 1
+    run "it answering" \
+      kubectl --namespace cloud rollout status deployment/aws --timeout=5m || exit 1
     ;;
   argocd)
     section "Argo CD"
@@ -74,7 +74,7 @@ case ${1:-} in
     run "the lab's kubectl contexts" scripts/identities.sh remove || exit 1
     ;;
   *)
-    echo "usage: $(basename "$0") [plan|cluster|gateway|localstack|argocd|down]" >&2
+    echo "usage: $(basename "$0") [plan|cluster|gateway|cloud|argocd|down]" >&2
     exit 2
     ;;
 esac

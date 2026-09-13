@@ -15,7 +15,7 @@ docker-ready:
     @docker info >/dev/null 2>&1 || { echo "Docker isn't reachable here: ./setup.sh says what's missing" >&2; exit 1; }
 
 # Create the cluster, the base layer and Argo CD, then wait for Argo CD to deliver the rest (idempotent)
-up: plan preflight cluster gateway localstack argocd identities notifications wait check
+up: plan preflight cluster gateway cloud argocd identities notifications wait check
 
 # What `just up` is about to do, and roughly how long it takes.
 [private]
@@ -34,9 +34,9 @@ cluster: docker-ready
 gateway:
     @scripts/base.sh gateway
 
-# Deploy LocalStack (last Community image, no auth token) and its DNS rule
-localstack:
-    @scripts/base.sh localstack
+# Deploy the lab's cloud account (MiniStack, standing in for AWS) and its DNS rule
+cloud:
+    @scripts/base.sh cloud
 
 # Install Argo CD once and apply the projects and the root Application; from then on, Argo CD manages itself from Git
 argocd:

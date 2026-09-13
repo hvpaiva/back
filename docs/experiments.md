@@ -17,7 +17,7 @@ crossplane resource trace queues.back.lab emails -n hello-staging
 kubectl -n hello-staging get secret emails-queue -o jsonpath='{.data.QUEUE_URL}' | base64 -d
 ```
 
-In a few seconds the request is ready, two queues exist in LocalStack (`aws sqs list-queues`: the
+In a few seconds the request is ready, two queues exist in the cloud account (`aws sqs list-queues`: the
 queue and the dead-letter queue messages land in after five failed deliveries) and the Secret holds
 what a service would read. `kubectl -n hello-staging delete queues.back.lab emails` takes all of it
 back.
@@ -87,7 +87,7 @@ of Git rather than a place where things are decided.
 ### Break it on purpose
 
 ```sh
-kubectl -n localstack scale deploy localstack --replicas=0
+kubectl -n cloud scale deploy aws --replicas=0
 ```
 
 Within a minute the managed bucket stops being ready, and a few seconds later it stops being synced
@@ -101,7 +101,7 @@ kubectl -n hello-staging describe buckets.s3.aws.m.upbound.io
 ```
 
 `--replicas=1` brings it back: about half a minute later the managed bucket is ready again, the
-request follows, and the buckets exist once more, because LocalStack lost its state and Crossplane
+request follows, and the buckets exist once more, because the emulator lost its state and Crossplane
 creates what it believes in.
 
 Most of what goes wrong here has that shape, one handoff at a time:
@@ -224,5 +224,5 @@ also puts each stage to the API server as a dry run.
 A fork is also how to watch the platform refuse to throw data away. Take `bucket:` out of hello's
 `values.yaml` and push: the chart stops rendering the request, and Argo CD leaves it standing and
 says so, marking the Application OutOfSync with the request needing pruning. The bucket is still in
-LocalStack, and putting the line back adopts it again. That's `Prune=false,Delete=false` on the
+the cloud account, and putting the line back adopts it again. That's `Prune=false,Delete=false` on the
 request, in `charts/app/templates/bucket.yaml`.

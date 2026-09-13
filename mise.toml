@@ -19,7 +19,7 @@ KUBECONFIG = "{{config_root}}/.kube/config"
 # The argocd CLI keeps its login in .argocd/ and reaches the server through Traefik over plain HTTP.
 ARGOCD_OPTS = "--config {{config_root}}/.argocd/config --grpc-web --plaintext"
 
-# AWS calls from here go to LocalStack, whatever credentials or profiles exist elsewhere.
+# AWS calls from here go to the lab's cloud account, whatever credentials or profiles exist elsewhere.
 AWS_ENDPOINT_URL = "http://localhost:4566"
 AWS_ACCESS_KEY_ID = "test"
 AWS_SECRET_ACCESS_KEY = "test"
