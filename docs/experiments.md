@@ -71,7 +71,12 @@ Start the watch first, in another terminal: the Application has a watch of its o
 manages, and it's quicker than a minute.
 
 ```sh
-kubectl -n hello-staging get deploy hello -w     # leave this running
+kubectl -n hello-staging get deploy hello -w
+```
+
+Then, from here:
+
+```sh
 kubectl -n hello-staging scale deploy hello --replicas=3
 ```
 
@@ -85,10 +90,19 @@ of Git rather than a place where things are decided.
 kubectl -n localstack scale deploy localstack --replicas=0
 ```
 
-Within a minute the managed bucket stops being ready, the request turns Degraded in Argo CD's tree
-and hello's page says it can't reach its bucket, while the service's Application stays Healthy: an
-Application's health only counts its own resources. `--replicas=1` brings everything back, because
-LocalStack lost its state and Crossplane creates the buckets again.
+Within a minute the managed bucket stops being ready, and a few seconds later it stops being synced
+too: the provider keeps trying to create a bucket it can no longer see. hello's page says it can't
+reach its bucket, the request turns *Progressing*, and so does the service's Application, which is
+also what a first deploy looks like. *Degraded* is kept for a request Crossplane can't process at
+all, and this one it processes fine, so the error itself is a level further down:
+
+```sh
+kubectl -n hello-staging describe buckets.s3.aws.m.upbound.io
+```
+
+`--replicas=1` brings it back: about half a minute later the managed bucket is ready again, the
+request follows, and the buckets exist once more, because LocalStack lost its state and Crossplane
+creates what it believes in.
 
 Most of what goes wrong here has that shape, one handoff at a time:
 [when something doesn't work](troubleshooting.md).
@@ -112,38 +126,68 @@ just render cache                                  # what it would create, check
 just diff apis                                     # what applying the folder would change in the cluster
 just local apis                                    # apply platform/apis/ from here, not from Git
 kubectl apply -f platform/apis/cache/example.yaml
-kubectl -n hello-staging get pods -l app.kubernetes.io/name=sessions-cache
+kubectl -n hello-staging logs deploy/sessions-cache | grep -m1 version=
 just gitops                                        # hand it back to Git
+kubectl -n hello-staging logs deploy/sessions-cache | grep -m1 version=
 ```
 
 `cache` there is the folder under `platform/apis/`, and `apis` is the Argo CD Application that
 delivers all of them (`kubectl -n argocd get applications` lists the rest).
 
-The Secret keeps its keys, the Service keeps its address, and anything reading them notices
-nothing. That's what an API buys over a template. A value that changes is a different matter, since
-`envFrom` is read once, at start: add a key to a composed Secret and the service rolls within a
-second, because Reloader watches the Secrets a pod reads. Crossplane leaves that key alone, owning
-only the fields it writes itself, so take it back out and watch the service roll again.
+The first of those two lines names Redis and the second names Valkey. Between them the Secret keeps
+its keys, the Service keeps its address, and anything reading them notices nothing: that's what an
+API buys over a template. `just local` pauses Argo CD's enforcement for that folder and for the root
+Application that would restore it, so while it's on, the cluster and Git disagree on purpose.
+
+The last line is the one worth waiting for. `just gitops` hands the folder back, and the request,
+still the same request and still running, is a Valkey server again seconds later, because that's
+what Git says it is. Then clean up after yourself:
 
 ```sh
-kubectl -n hello-staging patch secret hello-bucket --type merge -p '{"stringData":{"PROBE":"1"}}'
-kubectl -n hello-staging get pods -w
-kubectl -n hello-staging patch secret hello-bucket --type json -p '[{"op":"remove","path":"/data/PROBE"}]'
+kubectl -n hello-staging delete caches.back.lab sessions
+git checkout platform/apis/cache/composition.yaml
 ```
- `just local` pauses Argo CD's enforcement for
-that folder and for the root Application that would restore it, so while it's on, the cluster and
-Git disagree on purpose.
 
 ### Add a field to an API
 
-A `Cache` only takes a size. Adding an eviction policy is a property in
-`platform/apis/cache/definition.yaml`, with an `enum` and a `default`, and one line in the
-Composition, where `--maxmemory-policy` is currently fixed. `just render cache` shows the result
-before anything is applied, and validates it against the schemas.
+A `Cache` only takes a size. An eviction policy is a property in
+`platform/apis/cache/definition.yaml`:
 
-Then try taking it away again, or look at how `Queue` refuses to switch between standard and FIFO
-(`self == oldSelf` in its definition). An API says no to the changes the thing behind it can't
-make, and it says so at `kubectl apply` time, with a message the platform wrote.
+```yaml
+                evictionPolicy:
+                  type: string
+                  enum: [allkeys-lru, allkeys-lfu, volatile-lru, noeviction]
+                  default: allkeys-lru
+                  description: Which keys the cache drops when it runs out of room.
+```
+
+and one line in the Composition, where `--maxmemory-policy` is fixed:
+
+```diff
+-                        - allkeys-lru
++                        - {{ $xr.spec.evictionPolicy }}
+```
+
+`just render cache` fills in the default and shows it reaching the server's arguments, checked
+against the schemas. The description of `size` names the policy it used to be fixed at, so that
+sentence needs a word too: a field arrives with the documentation around it, or the next reader
+learns something that stopped being true.
+
+An API also says no, and it's worth hearing it say so. Put a policy that isn't in the list into the
+example request and the render stops at the schema, before a cluster is involved. `Queue` refuses
+something else: a change it can't make to a queue that already exists (ask for the queue first, if
+you took it back earlier).
+
+```sh
+kubectl -n hello-staging patch queues.back.lab emails --type merge -p '{"spec":{"fifo":true}}'
+```
+
+```
+The Queue "emails" is invalid: spec.fifo: Invalid value: true: A queue can't switch between standard and FIFO once it exists.
+```
+
+That sentence is in the definition (`self == oldSelf`), and the API server says it at `kubectl apply`
+time, whoever is applying and whatever they are applying from.
 
 ## With your own forks
 

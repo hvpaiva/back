@@ -43,9 +43,11 @@ Sync status and health answer different questions. *Synced* means the cluster ho
 and *Healthy* means what it holds is working. A service that deploys a broken image is Synced and
 Degraded; a service whose last commit never arrived is OutOfSync and Healthy.
 
-An Application's health only counts its own resources, so a request that Crossplane can't fulfil
-doesn't make the service's Application unhealthy on its own. The platform adds a health check for
-its own kinds, and the tree in the UI shows it.
+An Application's health only counts its own resources, and the managed resources a request creates
+aren't among them: what happens to them reaches the Application through the request or not at all.
+The platform adds a health check for its own kinds, which reads a request that isn't ready as
+*Progressing* and one Crossplane can't process as *Degraded*, and the tree in the UI shows which
+level it came from.
 
 Two things are worth knowing before hunting further: Argo CD polls every minute here, and it
 answers `permission denied` for an Application that doesn't exist. Both are in
