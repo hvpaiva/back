@@ -21,24 +21,22 @@ configs:
         hs.message = obj.status.health.message or ""
       end
       return hs
-    # Argo CD has no check for the platform's own kinds, one key per kind: ConfigMap keys can't hold `*`.
-    resource.customizations.health.back.lab_Bucket: &request-health |
-      local ready, synced
-      for _, c in ipairs(obj.status and obj.status.conditions or {}) do
-        if c.type == "Ready" then ready = c end
-        if c.type == "Synced" then synced = c end
-      end
-      if synced ~= nil and synced.status == "False" then
-        return {status = "Degraded", message = synced.message or synced.reason}
-      end
-      if ready ~= nil and ready.status == "True" then
-        return {status = "Healthy"}
-      end
-      return {status = "Progressing", message = ready and (ready.message or ready.reason) or "Waiting for Crossplane"}
-    resource.customizations.health.back.lab_Database: *request-health
-    resource.customizations.health.back.lab_Cache: *request-health
-    resource.customizations.health.back.lab_Queue: *request-health
-    resource.customizations.health.back.lab_Table: *request-health
+    # Argo CD has no check for the platform's own kinds; only this older single key takes a wildcard.
+    resource.customizations: |
+      back.lab/*:
+        health.lua: |
+          local ready, synced
+          for _, c in ipairs(obj.status and obj.status.conditions or {}) do
+            if c.type == "Ready" then ready = c end
+            if c.type == "Synced" then synced = c end
+          end
+          if synced ~= nil and synced.status == "False" then
+            return {status = "Degraded", message = synced.message or synced.reason}
+          end
+          if ready ~= nil and ready.status == "True" then
+            return {status = "Healthy"}
+          end
+          return {status = "Progressing", message = ready and (ready.message or ready.reason) or "Waiting for Crossplane"}
     # The built-in check says Degraded while a provider starts, failing its sync.
     resource.customizations.health.pkg.crossplane.io_Provider: |
       local installed, healthy = false, false
