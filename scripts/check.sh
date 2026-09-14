@@ -7,37 +7,40 @@ source scripts/lib.sh
 
 # Prints what the command printed, as ok when it succeeded and as fail otherwise.
 report() { # name command...
-  local name=$1 details
+  local name=$1 said
   shift
-  if details=$("$@" 2>&1); then
-    ok "$(printf '%-11s %s' "$name" "$details")"
+  if spin "$name" "$@"; then
+    ok "$(printf '%-11s %s' "$name" "$spun")"
   else
-    details=${details#jq: error (at *): }
-    fail "$(printf '%-11s %s' "$name" "${details:-no answer}")"
+    said=${spun#jq: error (at *): }
+    fail "$(printf '%-11s %s' "$name" "${said:-no answer}")"
   fi
 }
 
+# A component that stops answering has to fail its line, not hang the whole check.
+web() { curl -fsS --max-time 30 "$@"; }
+
 gateway() {
-  curl -fsS -o /dev/null http://traefik.localhost/dashboard/ && echo "http://traefik.localhost/dashboard/"
+  web -o /dev/null http://traefik.localhost/dashboard/ && echo "http://traefik.localhost/dashboard/"
 }
 
 cloud() {
-  curl -fsS http://localhost:4566/health | jq -er '"ministack \(.version) (\(.edition)), http://localhost:4566"'
+  web http://localhost:4566/health | jq -er '"ministack \(.version) (\(.edition)), http://localhost:4566"'
 }
 
 argocd_server() {
-  curl -fsS http://argocd.localhost/api/version |
+  web http://argocd.localhost/api/version |
     jq -er '"\(.Version | split("+")[0]), http://argocd.localhost (dev or platform-admin, password: just argocd-password <user>)"'
 }
 
 headlamp() {
-  curl -fsS -o /dev/null http://headlamp.localhost/ && echo "http://headlamp.localhost (token: just headlamp-token)"
+  web -o /dev/null http://headlamp.localhost/ && echo "http://headlamp.localhost (token: just headlamp-token)"
 }
 
 # Its page answers before it can reach the cluster, so ask the part that has to.
 crossview() {
   local status granted group missing=()
-  status=$(curl -fsS http://crossview.localhost/api/kubernetes/status | jq -r '.status')
+  status=$(web http://crossview.localhost/api/kubernetes/status | jq -r '.status')
   if [[ $status != ok ]]; then
     echo "its API answered ${status:-nothing}"
     return 1
@@ -62,7 +65,7 @@ crossview() {
 # Its page answers before it can reach the cloud account, and the lab gives it no way to write there.
 stackport() {
   local status writes account
-  read -r status writes < <(curl -fsS http://stackport.localhost/api/health |
+  read -r status writes < <(web http://stackport.localhost/api/health |
     jq -r '[.status, (.writes_enabled | tostring)] | @tsv')
   if [[ $status != ok ]]; then
     echo "its API answered ${status:-nothing}"
@@ -72,7 +75,10 @@ stackport() {
     echo "it can write to the cloud account: STACKPORT_ALLOW_WRITES in platform/stackport"
     return 1
   fi
-  account=$(curl -fsS http://stackport.localhost/api/endpoints | jq -r '.endpoints[0].health')
+  if ! account=$(web http://stackport.localhost/api/endpoints 2>/dev/null | jq -r '.endpoints[0].health'); then
+    echo "it stopped answering about the cloud account, which is what it does while that account is unreachable"
+    return 1
+  fi
   if [[ $account != healthy ]]; then
     echo "it calls the cloud account $account, and its own page won't say so"
     return 1
@@ -134,7 +140,7 @@ reloader() {
 }
 
 hello() { # stage url
-  curl -fsS "$2/api/info" | jq -er --arg stage "$1" --arg url "$2" '
+  web "$2/api/info" | jq -er --arg stage "$1" --arg url "$2" '
     if .bucket and (.bucket.reachable | not) then error("in \($stage), does not reach its bucket \(.bucket.name)")
     else "\(.version) in \($stage)\(if .bucket then ", bucket \(.bucket.name)" else "" end), \($url)" end'
 }
