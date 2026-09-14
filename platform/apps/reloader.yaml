@@ -9,20 +9,23 @@ metadata:
     argocd.argoproj.io/sync-wave: "3"
 spec:
   project: platform
-  source:
-    repoURL: https://stakater.github.io/stakater-charts
-    chart: reloader
-    targetRevision: 2.2.17
-    helm:
-      valuesObject:
-        reloader:
-          # The default strategy adds an env var to the pod template, which self-heal takes back out.
-          reloadStrategy: annotations
-          # Watching every namespace means reading every Secret in the cluster, Argo CD's included.
-          watchGlobally: false
-          namespaces:
-            - hello-staging
-            - hello-production
+  sources:
+    - repoURL: https://stakater.github.io/stakater-charts
+      chart: reloader
+      targetRevision: 2.2.17
+      helm:
+        valuesObject:
+          reloader:
+            # The default strategy adds an env var to the pod template, which self-heal takes back out.
+            reloadStrategy: annotations
+            # Watching every namespace means reading every Secret in the cluster, Argo CD's included.
+            watchGlobally: false
+            namespaces:
+              - hello-staging
+              - hello-production
+    - repoURL: https://github.com/hvpaiva/back.git
+      targetRevision: main
+      path: platform/reloader
   destination:
     server: https://kubernetes.default.svc
     namespace: reloader
