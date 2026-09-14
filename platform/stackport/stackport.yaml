@@ -45,7 +45,8 @@ spec:
               cpu: 50m
               memory: 128Mi
             limits:
-              memory: 512Mi
+              # It settles near 460 MiB, and a ceiling there is one the next request crosses.
+              memory: 1Gi
 ---
 apiVersion: v1
 kind: Service
