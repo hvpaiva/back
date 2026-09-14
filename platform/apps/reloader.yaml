@@ -4,9 +4,6 @@ kind: Application
 metadata:
   name: reloader
   namespace: argocd
-  annotations:
-    # After the ApplicationSet that brings the services, which is not the same as after their namespaces.
-    argocd.argoproj.io/sync-wave: "3"
 spec:
   project: platform
   sources:
@@ -23,6 +20,9 @@ spec:
             namespaces:
               - hello-staging
               - hello-production
+            # Granted by platform/reloader and, in each service's namespace, by the service's chart.
+            rbac:
+              enabled: false
     - repoURL: https://github.com/hvpaiva/back.git
       targetRevision: main
       path: platform/reloader

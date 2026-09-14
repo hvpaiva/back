@@ -96,14 +96,19 @@ Crossplane settled. An ApplicationSet counts as healthy once it has generated it
 without waiting for them to sync, so the wave holding it was over in under a second, and the
 Applications it generates sync on their own time, after root has already finished.
 
-Reloader is where that shows. Its chart puts a Role in each namespace it watches, and those
-namespaces belong to the services' own Applications, which root never waited for. On a cluster built
-from scratch the namespaces and Reloader's first sync landed in the same second and it won. When it
-loses, two RBAC objects report `SyncFailed` with `namespaces "hello-staging" not found`, and the
-Application then calls itself Healthy while staying OutOfSync, which is the part worth knowing. It
-syncs cleanly about eight seconds after the namespace appears, with or without a retry policy,
-because the sync operation never ends in failure: it keeps re-attempting. `just up` names it while
-that lasts, instead of looking slow.
+Reloader was where that showed. Its chart puts a Role in each namespace it watches, and those
+namespaces belong to the services' own Applications, so on a new cluster its first sync could land
+before them: two RBAC objects reported `SyncFailed` with `namespaces "hello-staging" not found`, and
+the Application called itself Healthy while staying OutOfSync until the namespace appeared.
+
+Holding the wave until the services sync doesn't cure that. With a health check that keeps the
+ApplicationSet Progressing until every Application it generated has synced, root's operation waits
+for as long as one service can't sync, and Argo CD starts no other sync of root meanwhile, so the
+platform's own changes stop landing. It also releases late: an ApplicationSet refreshes the sync
+status it lists only when it reconciles itself, which for the lab's services is every three
+minutes. The lab turns the chart's RBAC off instead. A ClusterRole ships with Reloader and each
+service's chart binds it in its own namespace; a Reloader that starts before that binding exists
+retries with a backoff and picks the namespace up within half a minute of it, without restarting.
 
 ## Moving a service between front doors costs a gap
 

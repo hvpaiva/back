@@ -117,7 +117,7 @@ crossplane_packages() {
 # Reloader only watches the namespaces it was given, and a service in any other one would keep
 # running with the Secret it started with.
 reloader() {
-  local watched kinds namespace missing=()
+  local watched kinds namespace namespaces missing=() unreadable=()
   watched=$(kubectl --namespace reloader get deployment reloader-reloader \
     --output jsonpath='{.spec.template.spec.containers[0].args}' |
     jq -r '.[] | select(startswith("--namespaces=")) | ltrimstr("--namespaces=")')
@@ -134,6 +134,17 @@ reloader() {
   fi
   if ((${#missing[@]} > 0)); then
     echo "doesn't watch ${missing[*]}, where requests live: add them in platform/apps/reloader.yaml"
+    return 1
+  fi
+  IFS=, read -ra namespaces <<<"$watched"
+  for namespace in "${namespaces[@]}"; do
+    if ! kubectl auth can-i list secrets --namespace "$namespace" \
+      --as system:serviceaccount:reloader:reloader-reloader >/dev/null 2>&1; then
+      unreadable+=("$namespace")
+    fi
+  done
+  if ((${#unreadable[@]} > 0)); then
+    echo "can't read Secrets in ${unreadable[*]}: nothing binds the reloader ClusterRole there"
     return 1
   fi
   echo "watches $watched"
