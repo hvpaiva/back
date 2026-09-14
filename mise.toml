@@ -9,6 +9,8 @@ helm = "4.3.0"
 # Matches the Argo CD version installed by `just argocd`.
 argocd = "3.5.2"
 crossplane = "2.5.0"
+# Matches the Kyverno the platform installs, so the CLI reads policies the way the cluster will.
+kyverno = "1.19.1"
 aws-cli = "2.36.43"
 jq = "1.8.2"
 

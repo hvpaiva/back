@@ -1,0 +1,42 @@
+# The gate every write passes through. It registers its webhooks at once, but the two that
+# reach anything outside Kyverno stay empty until a policy exists.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  source:
+    repoURL: https://kyverno.github.io/kyverno
+    chart: kyverno
+    targetRevision: 3.9.1
+    helm:
+      valuesObject:
+        config:
+          # Kyverno writes its own defaults into this ConfigMap, which preserved read as drift.
+          preserve: false
+        cleanupController:
+          # It serves CleanupPolicy alone, and the platform deletes nothing on a timer.
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Its CRDs don't fit in the annotation a client-side apply records them in.
+      - ServerSideApply=true
+      - CreateNamespace=true
+  ignoreDifferences:
+    # Eleven of its CRDs come from a subchart that writes an empty label and annotation map onto
+    # each. The API server keeps neither, so both read as a change on every comparison.
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        - /metadata/labels
+        - /metadata/annotations

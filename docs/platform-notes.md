@@ -26,6 +26,20 @@ Argo CD decides whether a resource is healthy by reading its status, which anoth
 
 Client-side apply, Argo CD's default, keeps a copy of each object in an annotation limited to 256 KB. Argo CD's own CRDs are bigger than that, so the Application that manages Argo CD uses `ServerSideApply=true`.
 
+## An empty map is a difference that never goes away
+
+Eleven of Kyverno's CRDs come from a subchart that writes `labels` and `annotations` onto each from
+values that are empty by default, so what Git renders carries an empty map for both. The API server
+stores neither, so Argo CD compares a field that exists in the manifest with one that doesn't exist
+in the cluster, and the Application reports eleven resources OutOfSync for good. `kubectl diff` on
+the same manifest prints nothing at all: to the API server the two are identical.
+
+Filling the maps in from the chart doesn't settle it, because those values belong to the subchart
+and the parent's own `crds.customLabels` feeds a different one. `ignoreDifferences` does, on both
+fields at once. Covering only `labels` leaves `annotations` differing and the Application stays
+exactly as OutOfSync as it was, which reads like the mechanism not working rather than like half of
+it being applied.
+
 ## "Permission denied" can mean "doesn't exist"
 
 Asking Argo CD for an Application that doesn't exist returns `permission denied`, even for an admin. It's deliberate: a user without access can't find out which Applications exist by guessing names. Right after a push that adds an Application, refresh the Application that creates it (usually `root`), not the new one.

@@ -67,6 +67,24 @@ stackport() {
             else "http://stackport.localhost (read-only)" end'
 }
 
+# It answers admission requests before any policy selects anything, so ask what it intercepts.
+kyverno() {
+  local version policies webhooks
+  version=$(kubectl --namespace kyverno get deployment kyverno-admission-controller \
+    --output jsonpath='{.spec.template.spec.containers[0].image}')
+  policies=$(kubectl get validatingpolicies,mutatingpolicies,generatingpolicies \
+    --output name 2>/dev/null | wc -l)
+  webhooks=$(kubectl get validatingwebhookconfiguration kyverno-resource-validating-webhook-cfg \
+    --output json | jq '.webhooks | length')
+  # Kyverno fills that webhook from the policies it finds; empty with policies in the cluster
+  # means every write is passing straight through.
+  if ((policies > 0 && webhooks == 0)); then
+    echo "$policies policies, and nothing reaches its webhook: kubectl --namespace kyverno logs deployment/kyverno-admission-controller"
+    return 1
+  fi
+  echo "${version##*:}, $policies policies in force"
+}
+
 crossplane_packages() {
   kubectl get providers.pkg.crossplane.io,functions.pkg.crossplane.io --output json | jq -er '.items
     | if length > 0 and all(any(.status.conditions[]?; .type == "Healthy" and .status == "True"))
@@ -114,6 +132,7 @@ report crossview crossview
 report stackport stackport
 report crossplane crossplane_packages
 report reloader reloader
+report kyverno kyverno
 scripts/identities.sh check || problems=$((problems + 1))
 report hello hello staging http://hello.staging.localhost
 report hello hello production http://hello.localhost
