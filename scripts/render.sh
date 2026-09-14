@@ -13,7 +13,10 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
 # Kinds a Composition can create that another operator defines, and the Application that installs it.
-declare -A operators=([postgresql.cnpg.io]=platform/apps/cloudnative-pg.yaml)
+declare -A operators=(
+  [postgresql.cnpg.io]=platform/apps/cloudnative-pg.yaml
+  [barmancloud.cnpg.io]=platform/apps/plugin-barman-cloud.yaml
+)
 
 api=${1:-}
 dir=platform/apis/$api
@@ -43,10 +46,14 @@ chart_crds() { # application
   cp "$cached" "$schemas/"
 }
 
-# Validation needs every schema in one directory: the API's own, and the providers' for what it composes.
+# Validation needs every schema in one directory: every API's, since one can compose another, and the providers'.
 schemas=$work/schemas
 mkdir "$schemas"
-cp "$dir/definition.yaml" platform/crossplane/providers.yaml "$schemas/"
+for definition in platform/apis/*/definition.yaml; do
+  name=${definition%/definition.yaml}
+  cp "$definition" "$schemas/${name##*/}.yaml"
+done
+cp platform/crossplane/providers.yaml "$schemas/"
 rendered=$work/rendered.yaml
 
 # --include-full-xr keeps the request's own spec in the output, which the XRD's rules are checked against.
