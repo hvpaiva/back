@@ -155,6 +155,32 @@ kubectl -n hello-staging delete caches.back.lab sessions
 git checkout platform/apis/cache/composition.yaml
 ```
 
+### Move a service to the other front door
+
+Traefik serves Ingress and Gateway API at once, and which one a stage uses is a line in
+`platform/apps/applicationset.yaml`. Staging already runs on a route; production is still on an
+Ingress:
+
+```diff
+                 - repo: https://github.com/hvpaiva/back-hello.git
+                   stage: production
+                   branch: main
+-                  route: ingress
++                  route: gateway
+```
+
+```sh
+just diff root                                     # one parameter on one Application changes
+just local root
+kubectl -n hello-production get ingress,httproute
+curl -s -o /dev/null -w '%{http_code}\n' http://hello.localhost
+```
+
+The Ingress goes, a route takes its place, and the address stays the same. Nothing in back-hello
+changed, which is the whole point: the front door is the platform's business, and a service that had
+to be edited for this would be a service the platform can't migrate on its own. `just gitops` puts
+it back.
+
 ### Add a field to an API
 
 A `Cache` only takes a size. An eviction policy is a property in

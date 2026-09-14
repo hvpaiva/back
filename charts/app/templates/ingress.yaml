@@ -1,4 +1,4 @@
-{{- if .Values.public }}
+{{- if and .Values.public (ne .Values.platform.route "gateway") }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

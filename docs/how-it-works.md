@@ -112,4 +112,4 @@ Every service is deployed by the same chart, `charts/app`, fed by the service's 
 | a bucket, with or without versioning | its name, region and credentials, and that removing it never deletes the data |
 | | non-root user, read-only filesystem, no Kubernetes API token |
 
-`values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed (say, routes through Gateway API instead of Ingress) by changing the chart, without touching a single service repository.
+`values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed without touching a single service repository: hello is served through Traefik's Gateway in staging and through an Ingress in production, decided one stage at a time in the ApplicationSet, and hello's own values mention neither.

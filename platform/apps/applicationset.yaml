@@ -14,13 +14,16 @@ spec:
         # A matrix takes exactly two generators, so the repositories share the stages' list.
         generators:
           - list:
+              # route picks which of Traefik's two front doors serves a stage, one at a time.
               elements:
                 - repo: https://github.com/hvpaiva/back-hello.git
                   stage: staging
                   branch: staging
+                  route: gateway
                 - repo: https://github.com/hvpaiva/back-hello.git
                   stage: production
                   branch: main
+                  route: ingress
           - git:
               repoURL: '{{ .repo }}'
               revision: '{{ .branch }}'
@@ -47,6 +50,8 @@ spec:
             parameters:
               - name: platform.stage
                 value: '{{ .stage }}'
+              - name: platform.route
+                value: '{{ .route }}'
         - repoURL: '{{ .repo }}'
           targetRevision: '{{ .branch }}'
           ref: values

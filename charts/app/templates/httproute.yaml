@@ -1,0 +1,19 @@
+{{- if and .Values.public (eq .Values.platform.route "gateway") }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Values.application.name }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: traefik-gateway
+      namespace: traefik
+      sectionName: web
+  hostnames:
+    - {{ include "app.host" . }}
+  rules:
+    - backendRefs:
+        - name: {{ .Values.application.name }}
+          port: 80
+{{- end }}

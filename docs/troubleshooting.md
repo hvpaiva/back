@@ -103,8 +103,9 @@ composes it isn't ready yet, and the pod starts on its own once it is. `ImagePul
 fork means the package GitHub created is private.
 
 The route is separate from the pod. If the pod is Running and the address doesn't answer, check
-that the service asked to be public (`public: true` in its values) and that the Ingress got an
-address: `kubectl -n hello-staging get ingress`.
+that the service asked to be public (`public: true` in its values) and that whichever front door
+serves that stage is there: `kubectl -n hello-staging get ingress,httproute`. Which of the two it is
+comes from the ApplicationSet, not from the service.
 
 ## Starting over
 

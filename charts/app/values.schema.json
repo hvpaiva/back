@@ -49,7 +49,8 @@
       "additionalProperties": false,
       "properties": {
         "stage": { "type": "string", "pattern": "^[a-z0-9-]+$" },
-        "domain": { "type": "string" }
+        "domain": { "type": "string" },
+        "route": { "enum": ["ingress", "gateway"] }
       }
     }
   }

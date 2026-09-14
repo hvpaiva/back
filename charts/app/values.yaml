@@ -28,3 +28,5 @@ bucket: null
 platform:
   stage: staging
   domain: localhost
+  # Which of the two Traefik serves this service through: an Ingress, or a route on the Gateway.
+  route: ingress
