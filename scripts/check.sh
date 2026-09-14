@@ -69,11 +69,14 @@ stackport() {
 
 # It answers admission requests before any policy selects anything, so ask what it intercepts.
 kyverno() {
-  local version policies webhooks
+  local version kinds policies webhooks
   version=$(kubectl --namespace kyverno get deployment kyverno-admission-controller \
     --output jsonpath='{.spec.template.spec.containers[0].image}')
-  policies=$(kubectl get validatingpolicies,mutatingpolicies,generatingpolicies \
-    --output name 2>/dev/null | wc -l)
+  kinds=$({ kubectl api-resources --api-group=policies.kyverno.io --output name
+            kubectl api-resources --api-group=kyverno.io --output name; } |
+    grep -E '^(namespaced)?(validating|mutating|generating|imagevalidating)policies\.|^(cluster)?policies\.kyverno\.io$' |
+    paste -sd, -)
+  policies=$(kubectl get "$kinds" --all-namespaces --output name 2>/dev/null | wc -l)
   webhooks=$(kubectl get validatingwebhookconfiguration kyverno-resource-validating-webhook-cfg \
     --output json | jq '.webhooks | length')
   # Kyverno fills that webhook from the policies it finds; empty with policies in the cluster
