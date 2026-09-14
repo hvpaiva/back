@@ -75,9 +75,11 @@ case ${1:-} in
     login
     argocd app set root --sync-policy manual >/dev/null
     argocd app set "$2" --sync-policy manual >/dev/null
-    argocd app sync "$2" --local "$path"
-    ok "$2 runs what's in $path, and Argo CD compares it against that folder now, not against Git"
-    hint "root is the one that shows OutOfSync: its copy of $2 still has Git's sync policy"
+    run "$2 runs what's in $path, and Argo CD compares it against that folder now, not against Git" \
+      argocd app sync "$2" --local "$path" || exit 1
+    if [[ $2 != root ]]; then
+      hint "root is the one that shows OutOfSync: its copy of $2 still has Git's sync policy"
+    fi
     hint "just gitops puts it back"
     ;;
   gitops)
@@ -86,10 +88,10 @@ case ${1:-} in
     argocd app set root --sync-policy automated --self-heal --auto-prune >/dev/null
     # Syncing root restores the Applications it manages, sync policy included, right away. It
     # refuses while an operation of its own is still running, and that's fine: self-heal gets there.
-    argocd app sync root >/dev/null 2>&1 || true
+    spin "root follows Git again" argocd app sync root || true
     ok "root follows Git again, and the Applications it manages follow within a minute"
     while IFS= read -r app; do
-      if argocd app sync "$app" >/dev/null 2>&1; then
+      if spin "$app compares against Git again" argocd app sync "$app"; then
         ok "$app compares against Git again, not against a folder"
       else
         warn "$app still compares against a folder on disk: argocd app sync $app"

@@ -42,13 +42,12 @@ command_line() { # command...
   done
 }
 
-# A noisy command, reported like everything else: the command it runs, then a line that spins so a
-# slow step doesn't look like a stuck one. The output goes to the log, and to the screen if it fails.
-run() { # label command...
+# A line that spins while a command works, so a slow step doesn't look like a stuck one; what it printed is left in $spun.
+spun=''
+spin() { # label command...
   local label=$1 log status=0 pid frames='-\|/' i=0
   shift
   log=$(mktemp)
-  command_line "$@"
   if [[ -t 1 ]]; then
     "$@" >"$log" 2>&1 &
     pid=$!
@@ -61,17 +60,27 @@ run() { # label command...
   else
     "$@" >"$log" 2>&1 || status=$?
   fi
+  spun=$(cat "$log")
+  rm -f "$log"
+  return $status
+}
+
+# A noisy command, reported like every other step: the command it runs, then the result. Output to the log, and to the screen if it fails.
+run() { # label command...
+  local label=$1 status=0
+  shift
+  command_line "$@"
+  spin "$label" "$@" || status=$?
   mkdir -p "${lab_log%/*}"
   { printf '\n=== %s  %s\n$ %s\n' "$(date -u +%FT%TZ)" "$label" "$(printf '%q ' "$@")"
-    cat "$log"; } >>"$lab_log"
+    printf '%s\n' "$spun"; } >>"$lab_log"
   if ((status == 0)); then
     ok "$label"
   else
     fail "$label"
-    details <"$log"
+    if [[ -n $spun ]]; then details <<<"$spun"; fi
     hint "this run, and the ones before it: $lab_log"
   fi
-  rm -f "$log"
   return $status
 }
 
