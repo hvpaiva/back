@@ -14,11 +14,12 @@ request_kinds() {
   kubectl api-resources --api-group=back.lab --output name | paste -sd, -
 }
 
-# Argo CD annotates everything it delivers, so a request without that annotation was applied by hand.
+# Argo CD annotates everything it delivers, and what a request composed goes with that request: the rest was applied by hand.
 applied_by_hand() { # kinds
   kubectl get "$1" --all-namespaces --output json | jq -r '
     .items[]
     | select((.metadata.annotations // {})["argocd.argoproj.io/tracking-id"] == null)
+    | select(any(.metadata.ownerReferences[]?; .controller == true) | not)
     | [.metadata.namespace, (.kind | ascii_downcase), .metadata.name] | @tsv'
 }
 
