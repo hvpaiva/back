@@ -1,8 +1,10 @@
 # Platform notes
 
-Things that aren't obvious until they bite, collected while building the lab. Each one is small; together they're most of the work of putting these tools together.
+Things that aren't obvious until they bite, collected while building the lab, grouped by where they happen. Each one is small; together they're most of the work of putting these tools together.
 
-## Argo CD can't install itself
+## Installing Argo CD with Argo CD
+
+### Argo CD can't install itself
 
 Something has to install Argo CD before it can manage anything. Here `just argocd` renders its Helm chart once and applies the result, and an Application in `platform/apps/argocd.yaml` then adopts that installation. Adoption only works if the Application renders exactly what was applied: same chart version, same release name, same values file. Get one of them wrong and Argo CD creates a second copy of itself next to the first.
 
@@ -10,55 +12,23 @@ That first apply is server-side and uses `argocd-controller`, the field manager 
 
 The root Application has a bootstrap problem of its own: it belongs to the `platform` project, which it creates. `just argocd` applies the projects before root, and root keeps them in sync from then on.
 
-## Closing the default project takes every field
+### Closing the default project takes every field
 
 Argo CD creates a `default` project that allows everything, and an Application that names no project lands there. The lab closes it in `platform/apps/projects.yaml`, and every list has to be there, even the empty ones: the first apply to an object nobody applied before only changes the fields the manifest has. Left out, `clusterResourceWhitelist` would stay `*`.
 
 Applying it also warns every time, because Argo CD created the object without the annotation client-side apply keeps its copy in. `--server-side` trades that one warning for three, one per project, about the same annotation conflicting with Argo CD's own controller.
 
-## A local cluster gets no webhooks
-
-Argo CD learns about new commits through a GitHub webhook or by polling. GitHub can't reach a cluster on a laptop, so the lab polls every minute (the default is up to three). The Refresh button in the UI, or `argocd app get <app> --refresh`, checks right away.
-
-## Health depends on someone else writing status
-
-Argo CD decides whether a resource is healthy by reading its status, which another controller writes. An Ingress, for instance, only counts as healthy once it has an address, and in a cloud the load balancer fills that in. kind has no load balancer, so every Ingress stayed *Progressing* forever until Traefik was told to publish `127.0.0.1` (`cluster/traefik-values.yaml`). The same thing happens with custom resources, which Argo CD doesn't know how to judge at all without a health check written for them.
-
-## Some objects are too big for the default apply
+### Some objects are too big for the default apply
 
 Client-side apply, Argo CD's default, keeps a copy of each object in an annotation limited to 256 KB. Argo CD's own CRDs are bigger than that, so the Application that manages Argo CD uses `ServerSideApply=true`.
 
-## An empty map is a difference that never goes away
+## Sync order
 
-Eleven of Kyverno's CRDs come from a subchart that writes `labels` and `annotations` onto each from values that are empty by default, so what Git renders carries an empty map for both. The API server stores neither, so Argo CD compares a field that exists in the manifest with one that doesn't exist in the cluster, and the Application reports eleven resources OutOfSync for good. `kubectl diff` on the same manifest prints nothing at all: to the API server the two are identical.
+### Waves in an app of apps don't wait by default
 
-Filling the maps in from the chart doesn't settle it, because those values belong to the subchart and the parent's own `crds.customLabels` feeds a different one. `ignoreDifferences` does, on both fields at once. Covering only `labels` leaves `annotations` differing and the Application stays exactly as OutOfSync as it was, which reads like the mechanism not working rather than like half of it being applied.
+Sync waves order the resources of one Application, and Argo CD waits for each wave to be healthy before the next. But Argo CD 1.8 stopped assessing the health of Applications themselves, so a root Application applies all its children at once. The services would then be created before the APIs their requests use. `platform/argocd/values.yaml` restores that health check, and root waits: Crossplane, then the APIs, then the services. The cost is that a child that never becomes healthy holds back every later wave. And a child can look healthy for a moment between its own waves: on a fresh install, root moved on as soon as Crossplane itself was up, before its providers were installed. Harmless here, since the APIs only need Crossplane and the services' requests wait for the providers, but a child's health doesn't mean it has finished syncing.
 
-## "Permission denied" can mean "doesn't exist"
-
-Asking Argo CD for an Application that doesn't exist returns `permission denied`, even for an admin. It's deliberate: a user without access can't find out which Applications exist by guessing names. Right after a push that adds an Application, refresh the Application that creates it (usually `root`), not the new one.
-
-## One broken service can stop them all
-
-The ApplicationSet that creates the services' Applications reads fields from each service's `values.yaml`, such as `application.name`, and it's set to fail on a missing field (`missingkey=error`) rather than create an Application with an empty name. The failure isn't scoped to that service: generation stops for every service until the file is fixed. The chart's schema can't catch this one: it runs when an Application syncs, and that service never gets an Application. Only a check before the change is merged would.
-
-## A dry run checks the shape, not the content
-
-`kubectl apply --dry-run=server` validates an Application against its schema, which catches a misspelled field. It doesn't check that the repository, branch or path it points to exists. Those errors appear later, as a condition on the Application in Argo CD.
-
-## An Application applies every file in its folder
-
-The `apis` Application syncs `platform/apis/` recursively, so the example request each API ships next to its Composition would be created in the cluster on the next sync, in whatever namespace it names. `directory.exclude` keeps them out. What a folder would apply is easy to check before pushing it: `argocd app diff <app> --local <path>` renders the folder as it is on disk and compares it with the cluster. That command and `just local` read the folder from disk but the Application's own settings from the cluster, so a change to the Application itself, this exclusion included, only counts once it's pushed.
-
-On a cluster that was already running, the commit that added both the examples and the exclusion applied them in that order. Two Applications are involved, root for the `apis` Application and `apis` for the folder, and `apis` synced the new files before root handed it the exclusion. The four requests it created then stayed, because the APIs are never pruned, until they were deleted by hand. A cluster built after that commit never sees it: the Application is created with the exclusion already in it.
-
-## A local sync sees one source only
-
-`argocd app sync --local` and `argocd app diff --local` read the folder you point at and nothing else, so an Application with two sources loses the other one, without saying so. Asked to diff a service against `charts/app`, Argo CD ran `helm template` with no values at all and stopped at the chart's own schema, complaining that `application.name` was empty; asked to diff the Argo CD Application against `platform/argocd`, it went looking for a `Chart.yaml` that was never there. Only an Application with a single source pointing at a folder of this repository can be synced from disk, which here means `apis`, `rbac` and `root`. Everything else changes by pushing, and `just local` says which it is.
-
-The CLI also warns that a local diff without `--server-side-generate` is deprecated, and that flag doesn't work here. The folder travels as a gRPC stream, and the repo server, which is what checks it, reports a checksum for an empty archive where the CLI declared a full one (`calc e3b0c442…`, the hash of nothing). The same failure comes back through Traefik and through a port-forward, as grpc-web and as plain gRPC, with and without `--local-repo-root`, so it isn't the transport. Until it works, the warning is what the loop costs.
-
-## A wave orders one Application, not what another one creates
+### A wave orders one Application, not what another one creates
 
 Sync waves order the resources of a single sync, and between waves Argo CD waits for what it just applied to become healthy. Root uses that to bring the platform up in order, and it works where health covers what an object delivers: it sat on `Application/apis` for thirty seconds while Crossplane settled. An ApplicationSet counts as healthy once it has generated its Applications, without waiting for them to sync, so the wave holding it was over in under a second, and the Applications it generates sync on their own time, after root has already finished.
 
@@ -66,108 +36,154 @@ Reloader was where that showed. Its chart puts a Role in each namespace it watch
 
 Holding the wave until the services sync doesn't cure that. With a health check that keeps the ApplicationSet Progressing until every Application it generated has synced, root's operation waits for as long as one service can't sync, and Argo CD starts no other sync of root meanwhile, so the platform's own changes stop landing. It also releases late: an ApplicationSet refreshes the sync status it lists only when it reconciles itself, which for the lab's services is every three minutes. The lab turns the chart's RBAC off instead. A ClusterRole ships with Reloader and each service's chart binds it in its own namespace; a Reloader that starts before that binding exists retries with a backoff and picks the namespace up within half a minute of it, without restarting.
 
-## Moving a service between front doors costs a gap
+## What Argo CD compares and applies
 
-Traefik serves Ingress and Gateway API at the same time, so a service moves from one to the other by changing a parameter, and nothing about the service changes. The move is not seamless, though. Argo CD deletes the Ingress and creates the HTTPRoute in the same sync, and Traefik takes a moment to serve the new one, so the address stops answering for about two tenths of a second: measured twice, 28 failed requests out of 1225 on one stage and 18 out of 645 on the other. One request per route would have found nothing, which is how a migration like this gets called seamless.
+### A local cluster gets no webhooks
 
-The gap belongs to the swap, not to the route. A route created on its own starts serving within 66 to 179 ms of `kubectl apply`, and only the first Gateway route a cluster ever gets costs an extra miss, while Traefik's provider wakes up.
+Argo CD learns about new commits through a GitHub webhook or by polling. GitHub can't reach a cluster on a laptop, so the lab polls every minute (the default is up to three). The Refresh button in the UI, or `argocd app get <app> --refresh`, checks right away.
 
-## Letting teams create their namespaces
+### An empty map is a difference that never goes away
 
-Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.
+Eleven of Kyverno's CRDs come from a subchart that writes `labels` and `annotations` onto each from values that are empty by default, so what Git renders carries an empty map for both. The API server stores neither, so Argo CD compares a field that exists in the manifest with one that doesn't exist in the cluster, and the Application reports eleven resources OutOfSync for good. `kubectl diff` on the same manifest prints nothing at all: to the API server the two are identical.
 
-## Telling GitHub what was deployed
+Filling the maps in from the chart doesn't settle it, because those values belong to the subchart and the parent's own `crds.customLabels` feeds a different one. `ignoreDifferences` does, on both fields at once. Covering only `labels` leaves `annotations` differing and the Application stays exactly as OutOfSync as it was, which reads like the mechanism not working rather than like half of it being applied.
 
-Argo CD's GitHub notifications only sign in as a GitHub App, not with a personal token. The app's key lives in a Secret created by `just notifications` from a local file. The Argo CD chart normally creates that Secret itself, empty, so the lab turns that off and the Secret belongs to whoever creates it, outside Git.
+### A dry run checks the shape, not the content
 
-Two settings in the notification template are easy to get wrong. A service's Application has two sources, the platform's chart and the service's repository, so the status has to go to the second one (`sources[1]` and its revision), not to the chart's repository. And `autoMerge` must be off: on, GitHub tries to merge the default branch into the branch being deployed.
+`kubectl apply --dry-run=server` validates an Application against its schema, which catches a misspelled field. It doesn't check that the repository, branch or path it points to exists. Those errors appear later, as a condition on the Application in Argo CD.
 
-## A reusable workflow has the caller's permissions
+### An Application applies every file in its folder
 
-The delivery workflow pushes commits and images, but it can't grant itself permission to: it runs with the token of the service's CI, limited to what the calling job allows. Every service's CI has to grant `contents: write` and `packages: write` to the job that calls `delivery.yaml`.
+The `apis` Application syncs `platform/apis/` recursively, so the example request each API ships next to its Composition would be created in the cluster on the next sync, in whatever namespace it names. `directory.exclude` keeps them out. What a folder would apply is easy to check before pushing it: `argocd app diff <app> --local <path>` renders the folder as it is on disk and compares it with the cluster. That command and `just local` read the folder from disk but the Application's own settings from the cluster, so a change to the Application itself, this exclusion included, only counts once it's pushed.
 
-## A failing check doesn't block anything on its own
+### A local sync sees one source only
 
-Validation fails the pull request's check, but GitHub still lets someone merge it. Making the check required is a branch protection rule, and on the stage branches it has a catch: CI pushes deploy commits there itself, so the rule needs an exemption for it.
+`argocd app sync --local` and `argocd app diff --local` read the folder you point at and nothing else, so an Application with two sources loses the other one, without saying so. Asked to diff a service against `charts/app`, Argo CD ran `helm template` with no values at all and stopped at the chart's own schema, complaining that `application.name` was empty; asked to diff the Argo CD Application against `platform/argocd`, it went looking for a `Chart.yaml` that was never there. Only an Application with a single source pointing at a folder of this repository can be synced from disk, which here means `apis`, `rbac` and `root`. Everything else changes by pushing, and `just local` says which it is.
 
-## A green check before the code is live
+The CLI also warns that a local diff without `--server-side-generate` is deprecated, and that flag doesn't work here. The folder travels as a gRPC stream, and the repo server, which is what checks it, reports a checksum for an empty archive where the CLI declared a full one (`calc e3b0c442…`, the hash of nothing). The same failure comes back through Traefik and through a port-forward, as grpc-web and as plain gRPC, with and without `--local-repo-root`, so it isn't the transport. Until it works, the warning is what the loop costs.
 
-With code and configuration in the same branch, one change reaches staging as two commits: the developer's, then the one CI makes after building the image. Argo CD applies both, so both get a green `argocd/hello-staging` check and a staging deployment on GitHub. The first one only means the configuration at that commit is applied, and it still points to the previous image. The code is live when CI's commit, the one naming the new image, gets its check. Running a separate branch that only CI writes to would avoid this, at the cost of one more moving part.
+### "Permission denied" can mean "doesn't exist"
 
-## A promotion can conflict with edits near the image
+Asking Argo CD for an Application that doesn't exist returns `permission denied`, even for an admin. It's deliberate: a user without access can't find out which Applications exist by guessing names. Right after a push that adds an Application, refresh the Application that creates it (usually `root`), not the new one.
 
-On `main`, CI rewrites `image:` in `values-production.yaml` on every promotion, and `staging` never receives those commits. An edit on `staging` right next to that line (here, the comment above it) conflicts the next time `staging` is merged into `main`. Merge `main` into `staging` and keep `main`'s image, which the promotion overwrites anyway. Keeping the line CI owns away from what people edit, or in a file of its own, avoids the conflict altogether.
+## Health
 
-## Commits from CI don't trigger CI
+### Health depends on someone else writing status
 
-The service's CI commits the new image to its own repository. Commits pushed with the workflow's built-in token don't start new workflow runs, which is what keeps that from looping.
+Argo CD decides whether a resource is healthy by reading its status, which another controller writes. An Ingress, for instance, only counts as healthy once it has an address, and in a cloud the load balancer fills that in. kind has no load balancer, so every Ingress stayed *Progressing* forever until Traefik was told to publish `127.0.0.1` (`cluster/traefik-values.yaml`). The same thing happens with custom resources, which Argo CD doesn't know how to judge at all without a health check written for them.
 
-## A starting provider fails the sync that installs it
+### A starting provider fails the sync that installs it
 
 Argo CD's built-in health check for Crossplane providers reports *Degraded* while the provider's pod starts, and a *Degraded* resource fails the sync in progress. The first install got through only on Argo CD's automatic retries (five by default), which a slow image pull can run out of. `platform/argocd/values.yaml` replaces that check with one that stays *Progressing* until the provider is installed and healthy.
 
-## An endpoint override only covers the services it lists
-
-The AWS provider sends a service's calls to a custom endpoint only if that service is in the ProviderConfig's `endpoint.services`. With the list empty, the lab's first test bucket went to AWS itself, which rejected the dummy key. `platform/crossplane/cloud.yaml` lists `s3` and `s3control`, and any AWS service the platform starts using has to be added there first.
-
-## S3 needs S3 Control, and S3 Control needs wildcard DNS
-
-To read a bucket's tags, the provider calls S3 Control at `<account-id>.<endpoint>`, and it always has an account ID (`000000000000` against the lab's emulator). AWS has DNS for those names; the cluster didn't, so the bucket never became ready. `cluster/coredns.yaml` adds a CoreDNS rule that answers `<account-id>.aws.cloud.svc` with the emulator's Service. Swapping the emulator didn't retire the rule: with it removed, the bucket stops reconciling and says why, `operation error S3 Control: ListTagsForResource … no such host`.
-
-## An external name isn't always a name
-
-Crossplane's `crossplane.io/external-name` annotation says what a managed resource is called in the cloud, and for an S3 bucket that's the bucket's name. SQS identifies a queue by its URL instead, so the provider overwrote the annotation with the URL it got back, and the queues, which set no `name`, came up called `terraform-1ac4f3bd49da...`: the random name the Terraform provider these are generated from picks. The Queue Composition names them in a field, `forProvider.name`. Which of the two a resource uses is in the provider's external-name configuration, not in its schema.
-
-The two queues also carry a `metadata.name` of their own, the request's and the request's plus `-dlq`, so a trace says which is which instead of showing two generated names.
-
-## Unquoted, N is false
-
-A DynamoDB key is typed with a single letter: S, N or B. Written into a Composition's template without quotes, `type: N` reached the provider as the boolean `false`, because the YAML parser reads a bare N that way. `crossplane resource validate`, run against the provider's schema, caught it as "must be of type string". Anything a template writes that could be read as a boolean or a number needs quoting.
-
-## A Composition has no memory
-
-A Composition runs from scratch on every reconcile, so a password generated in its template would be a different password every time, and the service would be left holding the old one. The `Cache` Composition reads the password back from the Secret it composed and generates one only when there's nothing to read. Anything the platform can't recompute has to come from somewhere that keeps it: what was already composed, or whatever generated it in the first place.
-
-## Argo CD can't judge the platform's own kinds
+### Argo CD can't judge the platform's own kinds
 
 Argo CD ships health checks for Crossplane's kinds and for the providers' managed resources, but not for the APIs a platform defines. With the cloud account turned off, hello's bucket went unreachable, the provider marked the managed bucket not ready (*Degraded* in Argo CD's tree), Crossplane marked the request not ready, and the `hello-staging` Application stayed *Healthy*: an Application's health only counts its own resources, and to Argo CD the request had no health at all. `platform/argocd/values.yaml` adds a check for the platform's kinds: *Healthy* when the request is ready, *Degraded* when Crossplane can't process it, *Progressing* otherwise. It covers every kind in the group, the ones added later included, with one wildcard, `back.lab/*`, which only the older single `resource.customizations` key accepts: as a key of its own, `resource.customizations.health.back.lab_*` isn't a valid ConfigMap key, and a first attempt with it left Argo CD failing to update itself. A kind that needs a different check can still have its own key, which wins over the wildcard. It also hides the ProviderConfigUsages, one per managed resource, which crowded the tree without saying anything.
 
 That mapping is Argo CD's own. Asked about a managed resource with `Synced=True` and `Ready=False`, its bundled check answers *Progressing*, "Provisioning ...", and about the same resource with `Synced=False` it answers *Degraded* with the provider's message — `argocd admin settings resource-overrides health <object> --argocd-cm-path <configmap>` says so without a cluster. Copying it has one consequence worth knowing: while a dependency is down, the request stays *Progressing* for as long as the outage lasts, which reads like a first deploy rather than a failure, and the GitHub notification for a degraded Application never fires. A health check can't decide that on its own, because Argo CD's Lua has no clock (`os.time()` fails with "attempt to index a non-table object(nil)"), so anything based on how long something has been Progressing belongs in alerting instead.
 
-## Inactive resource types look like they're provisioning
+### Inactive resource types look like they're provisioning
 
 The S3 provider ships 50 resource types and the activation policy turns on two; the rest get a definition but no CRD. Argo CD's built-in check for Crossplane's kinds knows nothing about activation, so under the provider in Argo CD's tree, 48 definitions stayed *Progressing*, "Provisioning ...", for good. Nothing was wrong, and the Application stayed *Healthy*: it only counts its own resources. `platform/argocd/values.yaml` shows inactive definitions as *Suspended*. The new check only showed after a hard refresh of the Application (`argocd app get crossplane --hard-refresh`); until then, the definitions, which never change, kept the health the old check had given them.
 
-## Deleting a namespace can strand its managed resources
+## Services and teams
 
-Delete a namespace that still holds managed resources and some of them can stay behind, stuck on their finalizer, and the namespace with them. Before every reconcile, the provider records that the resource uses its ProviderConfig, in an object it keeps in the same namespace. The namespace controller deletes those records along with everything else, and a terminating namespace refuses new ones, so from then on the provider fails before doing anything, without a word in the resource's status. A bucket or a table can leave without touching the cloud account, since the platform never lets the provider delete them, but only if the provider got to it before its record went: in three namespaces, one of two stayed stuck, then two of four, then none. Restarting the provider doesn't help. It's an open Crossplane bug ([crossplane-runtime#1150](https://github.com/crossplane/crossplane-runtime/issues/1150)). Delete the requests first, then the namespace. If one is already stuck, remove its finalizer; whatever it created is still in the cloud account, and removing it there is a separate decision.
+### One broken service can stop them all
 
-## A request goes before what it composed does
+The ApplicationSet that creates the services' Applications reads fields from each service's `values.yaml`, such as `application.name`, and it's set to fail on a missing field (`missingkey=error`) rather than create an Application with an empty name. The failure isn't scoped to that service: generation stops for every service until the file is fixed. The chart's schema can't catch this one: it runs when an Application syncs, and that service never gets an Application. Only a check before the change is merged would.
 
-Delete a request and it leaves the API almost at once: gone by the first reading, 68 ms after the delete, finalizer and all. What it composed takes longer. A managed resource the provider has to delete in the cloud stayed 6 s in one run and about 30 s in three others, inside the provider's one-minute poll; a bucket or a table, which it only lets go of, left within about a second. So waiting for the request to disappear hands back a lab that is still tearing down, and re-applying the same request then races a resource that is still terminating. `just reset` waits on the `crossplane.io/composite` label instead, which is what the composed resources carry.
+### Letting teams create their namespaces
 
-## Waves in an app of apps don't wait by default
+Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.
 
-Sync waves order the resources of one Application, and Argo CD waits for each wave to be healthy before the next. But Argo CD 1.8 stopped assessing the health of Applications themselves, so a root Application applies all its children at once. The services would then be created before the APIs their requests use. `platform/argocd/values.yaml` restores that health check, and root waits: Crossplane, then the APIs, then the services. The cost is that a child that never becomes healthy holds back every later wave. And a child can look healthy for a moment between its own waves: on a fresh install, root moved on as soon as Crossplane itself was up, before its providers were installed. Harmless here, since the APIs only need Crossplane and the services' requests wait for the providers, but a child's health doesn't mean it has finished syncing.
+### Moving a service between front doors costs a gap
 
-## Drift is checked every ten minutes
+Traefik serves Ingress and Gateway API at the same time, so a service moves from one to the other by changing a parameter, and nothing about the service changes. The move is not seamless, though. Argo CD deletes the Ingress and creates the HTTPRoute in the same sync, and Traefik takes a moment to serve the new one, so the address stops answering for about two tenths of a second: measured twice, 28 failed requests out of 1225 on one stage and 18 out of 645 on the other. One request per route would have found nothing, which is how a migration like this gets called seamless.
+
+The gap belongs to the swap, not to the route. A route created on its own starts serving within 66 to 179 ms of `kubectl apply`, and only the first Gateway route a cluster ever gets costs an extra miss, while Traefik's provider wakes up.
+
+### Argo CD has permissions of its own
+
+Argo CD reads the cluster with its own ServiceAccount and decides what each user sees with its own RBAC, per Application rather than per resource: whoever can see an Application sees every resource in its tree. For `dev`, that's what kubectl's `view` shows in its services' namespaces, plus the Secrets' metadata and key names, which kubectl hides; the values are masked (`++++++++`). Argo CD only masks the `data` and `stringData` of Secrets, though. A password in a ConfigMap, or in a custom resource's spec or status, would show in full, which is why the platform's APIs hand out credentials in Secrets only. The two systems also drift apart as teams arrive: every developer sees every service in the `apps` project, logs included, while kubectl keeps each team to its own namespaces. A project per team would keep them aligned.
+
+## Crossplane and the cloud account
+
+### An endpoint override only covers the services it lists
+
+The AWS provider sends a service's calls to a custom endpoint only if that service is in the ProviderConfig's `endpoint.services`. With the list empty, the lab's first test bucket went to AWS itself, which rejected the dummy key. `platform/crossplane/cloud.yaml` lists `s3` and `s3control`, and any AWS service the platform starts using has to be added there first.
+
+### S3 needs S3 Control, and S3 Control needs wildcard DNS
+
+To read a bucket's tags, the provider calls S3 Control at `<account-id>.<endpoint>`, and it always has an account ID (`000000000000` against the lab's emulator). AWS has DNS for those names; the cluster didn't, so the bucket never became ready. `cluster/coredns.yaml` adds a CoreDNS rule that answers `<account-id>.aws.cloud.svc` with the emulator's Service. Swapping the emulator didn't retire the rule: with it removed, the bucket stops reconciling and says why, `operation error S3 Control: ListTagsForResource … no such host`.
+
+### An external name isn't always a name
+
+Crossplane's `crossplane.io/external-name` annotation says what a managed resource is called in the cloud, and for an S3 bucket that's the bucket's name. SQS identifies a queue by its URL instead, so the provider overwrote the annotation with the URL it got back, and the queues, which set no `name`, came up called `terraform-1ac4f3bd49da...`: the random name the Terraform provider these are generated from picks. The Queue Composition names them in a field, `forProvider.name`. Which of the two a resource uses is in the provider's external-name configuration, not in its schema.
+
+The two queues also carry a `metadata.name` of their own, the request's and the request's plus `-dlq`, so a trace says which is which instead of showing two generated names.
+
+### Unquoted, N is false
+
+A DynamoDB key is typed with a single letter: S, N or B. Written into a Composition's template without quotes, `type: N` reached the provider as the boolean `false`, because the YAML parser reads a bare N that way. `crossplane resource validate`, run against the provider's schema, caught it as "must be of type string". Anything a template writes that could be read as a boolean or a number needs quoting.
+
+### A Composition has no memory
+
+A Composition runs from scratch on every reconcile, so a password generated in its template would be a different password every time, and the service would be left holding the old one. The `Cache` Composition reads the password back from the Secret it composed and generates one only when there's nothing to read. Anything the platform can't recompute has to come from somewhere that keeps it: what was already composed, or whatever generated it in the first place.
+
+### Drift is checked every ten minutes
 
 A provider compares each managed resource with the cloud every ten minutes by default, so a bucket deleted by hand comes back up to ten minutes later. The lab sets one minute (`--poll=1m`, in `platform/crossplane/providers.yaml`), which costs an API call per resource per minute: fine here, worth measuring with thousands of resources.
 
-## Traefik's chart warns about CRDs it doesn't ship
+## Deleting requests
 
-Installing Traefik prints a deprecation notice from its chart: the Gateway API CRDs will no longer be shipped, and it names a version older than the one running here. The chart ships none of them already, `helm show crds` lists only `traefik.io` and `hub.traefik.io`, and `scripts/base.sh` installs the Gateway API itself, at the version Traefik is built against. That step keeps the chart's output to itself unless it fails, so the notice only shows when you run the `helm upgrade` by hand.
+### A request goes before what it composed does
 
-## The argocd CLI and Traefik
+Delete a request and it leaves the API almost at once: gone by the first reading, 68 ms after the delete, finalizer and all. What it composed takes longer. A managed resource the provider has to delete in the cloud stayed 6 s in one run and about 30 s in three others, inside the provider's one-minute poll; a bucket or a table, which it only lets go of, left within about a second. So waiting for the request to disappear hands back a lab that is still tearing down, and re-applying the same request then races a resource that is still terminating. `just reset` waits on the `crossplane.io/composite` label instead, which is what the composed resources carry.
+
+### Deleting a namespace can strand its managed resources
+
+Delete a namespace that still holds managed resources and some of them can stay behind, stuck on their finalizer, and the namespace with them. Before every reconcile, the provider records that the resource uses its ProviderConfig, in an object it keeps in the same namespace. The namespace controller deletes those records along with everything else, and a terminating namespace refuses new ones, so from then on the provider fails before doing anything, without a word in the resource's status. A bucket or a table can leave without touching the cloud account, since the platform never lets the provider delete them, but only if the provider got to it before its record went: in three namespaces, one of two stayed stuck, then two of four, then none. Restarting the provider doesn't help. It's an open Crossplane bug ([crossplane-runtime#1150](https://github.com/crossplane/crossplane-runtime/issues/1150)). Delete the requests first, then the namespace. If one is already stuck, remove its finalizer; whatever it created is still in the cloud account, and removing it there is a separate decision.
+
+## GitHub and CI
+
+### Telling GitHub what was deployed
+
+Argo CD's GitHub notifications only sign in as a GitHub App, not with a personal token. The app's key lives in a Secret created by `just notifications` from a local file. The Argo CD chart normally creates that Secret itself, empty, so the lab turns that off and the Secret belongs to whoever creates it, outside Git.
+
+Two settings in the notification template are easy to get wrong. A service's Application has two sources, the platform's chart and the service's repository, so the status has to go to the second one (`sources[1]` and its revision), not to the chart's repository. And `autoMerge` must be off: on, GitHub tries to merge the default branch into the branch being deployed.
+
+### A reusable workflow has the caller's permissions
+
+The delivery workflow pushes commits and images, but it can't grant itself permission to: it runs with the token of the service's CI, limited to what the calling job allows. Every service's CI has to grant `contents: write` and `packages: write` to the job that calls `delivery.yaml`.
+
+### A failing check doesn't block anything on its own
+
+Validation fails the pull request's check, but GitHub still lets someone merge it. Making the check required is a branch protection rule, and on the stage branches it has a catch: CI pushes deploy commits there itself, so the rule needs an exemption for it.
+
+### A green check before the code is live
+
+With code and configuration in the same branch, one change reaches staging as two commits: the developer's, then the one CI makes after building the image. Argo CD applies both, so both get a green `argocd/hello-staging` check and a staging deployment on GitHub. The first one only means the configuration at that commit is applied, and it still points to the previous image. The code is live when CI's commit, the one naming the new image, gets its check. Running a separate branch that only CI writes to would avoid this, at the cost of one more moving part.
+
+### A promotion can conflict with edits near the image
+
+On `main`, CI rewrites `image:` in `values-production.yaml` on every promotion, and `staging` never receives those commits. An edit on `staging` right next to that line (here, the comment above it) conflicts the next time `staging` is merged into `main`. Merge `main` into `staging` and keep `main`'s image, which the promotion overwrites anyway. Keeping the line CI owns away from what people edit, or in a file of its own, avoids the conflict altogether.
+
+### Commits from CI don't trigger CI
+
+The service's CI commits the new image to its own repository. Commits pushed with the workflow's built-in token don't start new workflow runs, which is what keeps that from looping.
+
+## Tools around the platform
+
+### The argocd CLI and Traefik
 
 Before logging in, `argocd login` probes the server for TLS. Traefik answers that probe with its default certificate, even on port 80, and the CLI then stops to ask whether to proceed. `just argocd-login` skips the probe (`--skip-test-tls`), and `ARGOCD_OPTS` in `mise.toml` sets `--grpc-web --plaintext` for every command.
 
 `just argocd-login <user>` names the CLI's context after the user. To switch, log in again: `argocd context <name>` writes a file under `~/.config/argocd`, outside the lab's own config, and fails.
 
-## Argo CD has permissions of its own
+### Traefik's chart warns about CRDs it doesn't ship
 
-Argo CD reads the cluster with its own ServiceAccount and decides what each user sees with its own RBAC, per Application rather than per resource: whoever can see an Application sees every resource in its tree. For `dev`, that's what kubectl's `view` shows in its services' namespaces, plus the Secrets' metadata and key names, which kubectl hides; the values are masked (`++++++++`). Argo CD only masks the `data` and `stringData` of Secrets, though. A password in a ConfigMap, or in a custom resource's spec or status, would show in full, which is why the platform's APIs hand out credentials in Secrets only. The two systems also drift apart as teams arrive: every developer sees every service in the `apps` project, logs included, while kubectl keeps each team to its own namespaces. A project per team would keep them aligned.
+Installing Traefik prints a deprecation notice from its chart: the Gateway API CRDs will no longer be shipped, and it names a version older than the one running here. The chart ships none of them already, `helm show crds` lists only `traefik.io` and `hub.traefik.io`, and `scripts/base.sh` installs the Gateway API itself, at the version Traefik is built against. That step keeps the chart's output to itself unless it fails, so the notice only shows when you run the `helm upgrade` by hand.
 
-## Crossview reads some things differently from kubectl
+### Crossview reads some things differently from kubectl
 
 Crossview's own table still counts composed resources the old way, so that one column reads zero while the panel beside it lists them. Three more things look wrong before anything is. The Composite Resources table has no namespace column, so hello's two Buckets read as the same row twice. The Managed Resources count includes the provider's own `ClusterProviderConfig`, which sits in Crossplane's category without being a managed resource, so it says four where `kubectl get managed -A` says three. And a composed Secret opens with an empty summary instead of saying the read was refused, which is the lab's narrow role for Crossview doing its job ([why](decisions.md#crossview-as-the-window-into-crossplane-rather-than-komoplane)).
