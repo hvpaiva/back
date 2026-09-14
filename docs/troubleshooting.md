@@ -34,9 +34,9 @@ argocd app get hello-staging --refresh    # check the repository now, instead of
 
 Sync status and health answer different questions. *Synced* means the cluster holds what Git says, and *Healthy* means what it holds is working. A service that deploys a broken image is Synced and Degraded; a service whose last commit never arrived is OutOfSync and Healthy.
 
-An Application's health only counts its own resources, and the managed resources a request creates aren't among them: what happens to them reaches the Application through the request or not at all. The platform adds a health check for its own kinds, which reads a request that isn't ready as *Progressing* and one Crossplane can't process as *Degraded*, and the tree in the UI shows which level it came from.
+An Application's health only counts its own resources, and the managed resources a request creates aren't among them: what happens to them reaches the Application through the request or not at all. The platform adds a health check for its own kinds, which reads a request that isn't ready as *Progressing* and one Crossplane can't process as *Degraded*, and the tree in the UI shows which level it came from ([more](platform-notes.md#argo-cd-cant-judge-the-platforms-own-kinds)).
 
-Two things are worth knowing before hunting further: Argo CD polls every minute here, and it answers `permission denied` for an Application that doesn't exist. Both are in [platform notes](platform-notes.md).
+Two things are worth knowing before hunting further: Argo CD [polls every minute](platform-notes.md#a-local-cluster-gets-no-webhooks) here, and it [answers `permission denied`](platform-notes.md#permission-denied-can-mean-doesnt-exist) for an Application that doesn't exist.
 
 ## The request
 
@@ -59,7 +59,7 @@ If the request produced nothing at all, the Composition itself failed. Crossplan
 
 ## The cloud account
 
-The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory: restart it and every bucket, queue and table is gone, while Crossplane still believes they exist. It notices within a minute and creates them again.
+The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory: restart it and every bucket, queue and table is gone, while Crossplane still believes they exist. It notices within a minute and creates them again ([why this emulator](decisions.md#ministack-as-the-cloud-account-pinned-by-digest)).
 
 ```sh
 aws s3 ls
@@ -82,7 +82,7 @@ The route is separate from the pod. If the pod is Running and the address doesn'
 
 ## Starting over
 
-The platform's requests hold data, so nothing deletes it on its own. Argo CD never prunes them, and a bucket or a table outlives its request: delete one by hand and its data stays in the cloud account, where applying the same request again picks it back up. Removing the data is a second, explicit step, in the account:
+The platform's requests hold data, so nothing deletes it on its own. A bucket or a table outlives its request, and applying the same request again picks its data back up ([why](decisions.md#a-services-data-outlives-its-request)). Removing the data is a second, explicit step, in the account:
 
 ```sh
 kubectl -n hello-staging delete tables.back.lab visits
@@ -91,6 +91,6 @@ aws dynamodb delete-table --table-name hello-staging-visits
 
 `just reset` takes both steps for every request nobody committed. A request Git holds comes back on Argo CD's next sync and adopts what it had.
 
-Delete requests before their namespace: a namespace deleted with managed resources still in it can get stuck, and so can they ([platform notes](platform-notes.md)).
+Delete requests before their namespace: a namespace deleted with managed resources still in it can get stuck, and so can they ([platform notes](platform-notes.md#deleting-a-namespace-can-strand-its-managed-resources)).
 
 `just down && just up` rebuilds everything from scratch in a few minutes, and the services come back at the versions Git says they run.

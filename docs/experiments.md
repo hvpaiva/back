@@ -56,11 +56,11 @@ kubectl -n hello-staging wait --for=condition=ready tables.back.lab/visits
 aws dynamodb scan --table-name hello-staging-visits --query Count
 ```
 
-Taking the data away is a step of its own, in the account, and `just reset` takes it for you.
+Taking the data away is a step of its own, in the account, and `just reset` takes it for you ([why](decisions.md#a-services-data-outlives-its-request)).
 
 ### Change what a service was given
 
-`envFrom` is read once, at start, so a rotated password or a renamed bucket would reach new pods and never the ones already running. The platform runs Reloader for that: it watches the Secrets a pod reads and rolls the Deployment when one of them changes.
+The platform runs Reloader so that a changed Secret reaches the pods already running: it watches the Secrets a pod reads and rolls the Deployment when one of them changes ([why](decisions.md#a-service-restarts-when-the-platform-changes-a-secret-it-handed-it)).
 
 ```sh
 kubectl -n hello-staging patch secret hello-bucket --type merge -p '{"stringData":{"PROBE":"1"}}'
@@ -73,7 +73,7 @@ The pods are replaced within a second or two. Crossplane leaves the extra key al
 kubectl -n hello-staging patch secret hello-bucket --type json -p '[{"op":"remove","path":"/data/PROBE"}]'
 ```
 
-Reloader watches the namespaces the platform names for it, in `platform/apps/reloader.yaml`, and `just check` says which those are. Watching the whole cluster instead would hand it every Secret in it, Argo CD's own included.
+Reloader watches the namespaces the platform names for it, in `platform/apps/reloader.yaml`, and `just check` says which those are.
 
 ### Look at it as a developer
 
@@ -107,7 +107,7 @@ It's back to one replica in about a second, before the extra pods are ever avail
 kubectl -n cloud scale deploy aws --replicas=0
 ```
 
-Within a minute the managed bucket stops being ready, and a few seconds later it stops being synced too: the provider keeps trying to create a bucket it can no longer see. hello's page says it can't reach its bucket, the request turns *Progressing*, and so does the service's Application, which is also what a first deploy looks like. *Degraded* is kept for a request Crossplane can't process at all, and this one it processes fine, so the error itself is a level further down:
+Within a minute the managed bucket stops being ready, and a few seconds later it stops being synced too: the provider keeps trying to create a bucket it can no longer see. hello's page says it can't reach its bucket, the request turns *Progressing*, and so does the service's Application, which is also what a first deploy looks like. *Degraded* is kept for a request Crossplane can't process at all ([why](platform-notes.md#argo-cd-cant-judge-the-platforms-own-kinds)), and this one it processes fine, so the error itself is a level further down:
 
 ```sh
 kubectl -n hello-staging describe buckets.s3.aws.m.upbound.io
@@ -184,7 +184,7 @@ kubectl -n hello-production get ingress,httproute
 curl -s -o /dev/null -w '%{http_code}\n' http://hello.localhost
 ```
 
-The Ingress goes and a route takes its place, at the same address and with one catch worth seeing: for about two tenths of a second, neither serves. Argo CD deletes one and creates the other in the same sync, and Traefik needs a moment to pick the route up. Hammer it and you'll watch that happen, 28 failed requests out of 1225 here; ask once and you'll never know it was there.
+The Ingress goes and a route takes its place, at the same address and with one catch worth seeing: for about two tenths of a second, neither serves. Hammer it and you'll watch that happen; ask once and you'll never know it was there ([why](platform-notes.md#moving-a-service-between-front-doors-costs-a-gap)).
 
 Nothing in back-hello changed, which is the whole point: the front door is the platform's business, and a service that had to be edited for this would be a service the platform can't migrate on its own. Then clean up after yourself:
 
@@ -242,7 +242,7 @@ The developer's loop. In back-hello, set `size: medium` in `charts/hello/values-
 
 ### Change the golden path for every service at once
 
-`charts/app` decides how every service is deployed, and each service's Application reads it from Git: Argo CD syncs only single-source Applications from disk, and a service's has two, the chart and its own values. Change what `small` means in `charts/app/templates/_helpers.tpl`, push, and both stages of hello roll with it, without a single service repository changing.
+`charts/app` decides how every service is deployed, and each service's Application reads it from Git, not from your disk ([why](platform-notes.md#a-local-sync-sees-one-source-only)). Change what `small` means in `charts/app/templates/_helpers.tpl`, push, and both stages of hello roll with it, without a single service repository changing.
 
 `just render-service` is the fast half here. It renders a service through the chart for every stage, the same way the delivery workflow validates a pull request, and with the lab running it also puts each stage to the API server as a dry run.
 

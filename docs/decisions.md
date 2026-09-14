@@ -56,7 +56,7 @@ It provides checks per language (`go.yaml` for now) and one delivery workflow fo
 
 ### One ApplicationSet for every service
 
-Onboarding a service is an entry in its list: a repository, a branch, and the stage that branch deploys. The cost is the blast radius: one unreadable values file stops the generator for every service.
+Onboarding a service is an entry in its list: a repository, a branch, and the stage that branch deploys. The cost is the blast radius: one unreadable values file stops the generator for every service ([how](platform-notes.md#one-broken-service-can-stop-them-all)).
 
 ### A Helm chart as the golden path
 
@@ -64,7 +64,7 @@ Helm is how many teams already package their services. Here the platform maintai
 
 ### A service restarts when the platform changes a Secret it handed it
 
-`envFrom` is read once, at start, so a rotated password or a renamed bucket would reach new pods and never the running ones. Reloader watches the Secrets a pod references and rolls the Deployment when one changes. It stamps the pod template rather than adding an environment variable, which the service's Application would take back out on its next sync, and Argo CD leaves the stamp alone, because it compares the fields it applies rather than everything on the object. It watches the services' namespaces by name instead of the whole cluster: watching everything would give it every Secret in the cluster, Argo CD's own among them, and the right to restart anything the platform runs. The cost is a list that has to grow when a service arrives, so `just check` compares it with the namespaces that hold requests and asks whether Reloader can read Secrets in each. What lets it act in a service's namespace is a RoleBinding that service's own chart renders, to a ClusterRole the platform ships with Reloader, so the grant exists exactly when the namespace does. Ordering Reloader after the services instead would mean holding a sync wave on the ApplicationSet, which ties the platform's own sync to every service's: one service that can't sync would keep the platform's changes from landing.
+`envFrom` is read once, at start, so a rotated password or a renamed bucket would reach new pods and never the running ones. Reloader watches the Secrets a pod references and rolls the Deployment when one changes. It stamps the pod template rather than adding an environment variable, which the service's Application would take back out on its next sync, and Argo CD leaves the stamp alone, because it compares the fields it applies rather than everything on the object. It watches the services' namespaces by name instead of the whole cluster: watching everything would give it every Secret in the cluster, Argo CD's own among them, and the right to restart anything the platform runs. The cost is a list that has to grow when a service arrives, so `just check` compares it with the namespaces that hold requests and asks whether Reloader can read Secrets in each. What lets it act in a service's namespace is a RoleBinding that service's own chart renders, to a ClusterRole the platform ships with Reloader, so the grant exists exactly when the namespace does. Ordering Reloader after the services instead would tie the platform's own sync to every service's ([why](platform-notes.md#a-wave-orders-one-application-not-what-another-one-creates)).
 
 ### Which front door serves a service is the platform's to set, not the service's
 
@@ -166,7 +166,7 @@ The chart binds the team's group to the `developer` role in each namespace it de
 
 ### Argo CD local accounts, with the built-in admin disabled
 
-`just identities` generates their passwords and keeps them in the cluster, not in Git. All services share one Argo CD project, so a developer sees other teams' services there, though not in kubectl. Separating teams in Argo CD takes a project per team.
+`just identities` generates their passwords and keeps them in the cluster, not in Git. All services share one Argo CD project, so a developer sees other teams' services there, though not in kubectl. Separating teams in Argo CD takes a project per team ([more](platform-notes.md#argo-cd-has-permissions-of-its-own)).
 
 ### The `default` project closed
 
@@ -192,8 +192,8 @@ Nothing else in the repo depends on the system: mise pins the same toolchain eve
 
 ### An authoring loop that doesn't go through Git
 
-Changing a Composition and pushing it to see what happens is a two-minute round trip. `just render <api>` runs the same functions Crossplane runs, here, in about a second, and checks the result against the schemas it has to satisfy. `just diff <app>` compares a folder on disk with what the cluster runs, the cheapest way to see what a push would do. `just render-service` covers the other thing a platform team changes all day, a service through the chart, for every stage at once; a chart change still reaches the cluster by push, because Argo CD syncs only single-source Applications from disk and a service's reads two repositories. `just local <app>` goes further and applies it, which means pausing Argo CD for that folder, and `just gitops` hands it back. Git stays the truth; the loop only admits that nobody writes a Composition right the first time.
+Changing a Composition and pushing it to see what happens is a two-minute round trip. `just render <api>` runs the same functions Crossplane runs, here, in about a second, and checks the result against the schemas it has to satisfy. `just diff <app>` compares a folder on disk with what the cluster runs, the cheapest way to see what a push would do. `just render-service` covers the other thing a platform team changes all day, a service through the chart, for every stage at once; a chart change still reaches the cluster by push ([why](platform-notes.md#a-local-sync-sees-one-source-only)). `just local <app>` goes further and applies it, which means pausing Argo CD for that folder, and `just gitops` hands it back. Git stays the truth; the loop only admits that nobody writes a Composition right the first time.
 
 ### Each API ships an example request next to its Composition
 
-It's what `just render` renders, and what to copy when asking for one by hand. The Application that delivers the APIs excludes those files, or it would create them in the cluster.
+It's what `just render` renders, and what to copy when asking for one by hand. The Application that delivers the APIs excludes those files, or it would create them in the cluster ([how](platform-notes.md#an-application-applies-every-file-in-its-folder)).
