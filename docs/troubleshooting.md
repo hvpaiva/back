@@ -59,7 +59,7 @@ If the request produced nothing at all, the Composition itself failed. Crossplan
 
 ## The cloud account
 
-The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory: restart it and every bucket, queue and table is gone, while Crossplane still believes they exist. It notices within a minute and creates them again ([why this emulator](decisions.md#ministack-as-the-cloud-account-pinned-by-digest)).
+The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory: restart it and every bucket, queue and table is gone, while Crossplane still believes they exist. Crossplane notices within a minute and creates them again ([why this emulator](decisions.md#ministack-as-the-cloud-account-pinned-by-digest)).
 
 ```sh
 aws s3 ls
@@ -78,7 +78,7 @@ kubectl -n hello-staging get events --sort-by=.lastTimestamp | tail
 
 A pod stuck in `ContainerCreating` is usually waiting for a Secret it mounts: the request that composes it isn't ready yet, and the pod starts on its own once it is. `ImagePullBackOff` on a fork means the package GitHub created is private.
 
-The route is separate from the pod. If the pod is Running and the address doesn't answer, check that the service asked to be public (`public: true` in its values) and that whichever front door serves that stage is there: `kubectl -n hello-staging get ingress,httproute`. Which of the two it is comes from the ApplicationSet, not from the service.
+The route is separate from the pod. If the pod is Running and the address doesn't answer, check that the service asked to be public (`public: true` in its values) and that whichever front door serves that stage is there: `kubectl -n hello-staging get ingress,httproute`. Which front door a stage uses comes from the ApplicationSet, not from the service.
 
 ## Starting over
 
