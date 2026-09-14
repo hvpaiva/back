@@ -30,17 +30,9 @@ Client-side apply, Argo CD's default, keeps a copy of each object in an annotati
 
 ## An empty map is a difference that never goes away
 
-Eleven of Kyverno's CRDs come from a subchart that writes `labels` and `annotations` onto each from
-values that are empty by default, so what Git renders carries an empty map for both. The API server
-stores neither, so Argo CD compares a field that exists in the manifest with one that doesn't exist
-in the cluster, and the Application reports eleven resources OutOfSync for good. `kubectl diff` on
-the same manifest prints nothing at all: to the API server the two are identical.
+Eleven of Kyverno's CRDs come from a subchart that writes `labels` and `annotations` onto each from values that are empty by default, so what Git renders carries an empty map for both. The API server stores neither, so Argo CD compares a field that exists in the manifest with one that doesn't exist in the cluster, and the Application reports eleven resources OutOfSync for good. `kubectl diff` on the same manifest prints nothing at all: to the API server the two are identical.
 
-Filling the maps in from the chart doesn't settle it, because those values belong to the subchart
-and the parent's own `crds.customLabels` feeds a different one. `ignoreDifferences` does, on both
-fields at once. Covering only `labels` leaves `annotations` differing and the Application stays
-exactly as OutOfSync as it was, which reads like the mechanism not working rather than like half of
-it being applied.
+Filling the maps in from the chart doesn't settle it, because those values belong to the subchart and the parent's own `crds.customLabels` feeds a different one. `ignoreDifferences` does, on both fields at once. Covering only `labels` leaves `annotations` differing and the Application stays exactly as OutOfSync as it was, which reads like the mechanism not working rather than like half of it being applied.
 
 ## "Permission denied" can mean "doesn't exist"
 
@@ -56,74 +48,29 @@ The ApplicationSet that creates the services' Applications reads fields from eac
 
 ## An Application applies every file in its folder
 
-The `apis` Application syncs `platform/apis/` recursively, so the example request each API ships
-next to its Composition would be created in the cluster on the next sync, in whatever namespace it
-names. `directory.exclude` keeps them out. What a folder would apply is easy to check before
-pushing it: `argocd app diff <app> --local <path>` renders the folder as it is on disk and compares
-it with the cluster. That command and `just local` read the folder from disk but the Application's
-own settings from the cluster, so a change to the Application itself, this exclusion included, only
-counts once it's pushed.
+The `apis` Application syncs `platform/apis/` recursively, so the example request each API ships next to its Composition would be created in the cluster on the next sync, in whatever namespace it names. `directory.exclude` keeps them out. What a folder would apply is easy to check before pushing it: `argocd app diff <app> --local <path>` renders the folder as it is on disk and compares it with the cluster. That command and `just local` read the folder from disk but the Application's own settings from the cluster, so a change to the Application itself, this exclusion included, only counts once it's pushed.
 
-On a cluster that was already running, the commit that added both the examples and the exclusion
-applied them in that order. Two Applications are involved, root for the `apis` Application and
-`apis` for the folder, and `apis` synced the new files before root handed it the exclusion. The
-four requests it created then stayed, because the APIs are never pruned, until they were deleted by
-hand. A cluster built after that commit never sees it: the Application is created with the
-exclusion already in it.
+On a cluster that was already running, the commit that added both the examples and the exclusion applied them in that order. Two Applications are involved, root for the `apis` Application and `apis` for the folder, and `apis` synced the new files before root handed it the exclusion. The four requests it created then stayed, because the APIs are never pruned, until they were deleted by hand. A cluster built after that commit never sees it: the Application is created with the exclusion already in it.
 
 ## A local sync sees one source only
 
-`argocd app sync --local` and `argocd app diff --local` read the folder you point at and nothing
-else, so an Application with two sources loses the other one, without saying so. Asked to diff a
-service against `charts/app`, Argo CD ran `helm template` with no values at all and stopped at the
-chart's own schema, complaining that `application.name` was empty; asked to diff the Argo CD
-Application against `platform/argocd`, it went looking for a `Chart.yaml` that was never there.
-Only an Application with a single source pointing at a folder of this repository can be synced from
-disk, which here means `apis`, `rbac` and `root`. Everything else changes by pushing, and
-`just local` says which it is.
+`argocd app sync --local` and `argocd app diff --local` read the folder you point at and nothing else, so an Application with two sources loses the other one, without saying so. Asked to diff a service against `charts/app`, Argo CD ran `helm template` with no values at all and stopped at the chart's own schema, complaining that `application.name` was empty; asked to diff the Argo CD Application against `platform/argocd`, it went looking for a `Chart.yaml` that was never there. Only an Application with a single source pointing at a folder of this repository can be synced from disk, which here means `apis`, `rbac` and `root`. Everything else changes by pushing, and `just local` says which it is.
 
-The CLI also warns that a local diff without `--server-side-generate` is deprecated, and that flag
-doesn't work here. The folder travels as a gRPC stream, and the repo server, which is what checks it,
-reports a checksum for an empty archive where the CLI declared a full one (`calc e3b0c442…`, the hash
-of nothing). The same failure comes back through Traefik and through a port-forward, as grpc-web and
-as plain gRPC, with and without `--local-repo-root`, so it isn't the transport. Until it works, the
-warning is what the loop costs.
+The CLI also warns that a local diff without `--server-side-generate` is deprecated, and that flag doesn't work here. The folder travels as a gRPC stream, and the repo server, which is what checks it, reports a checksum for an empty archive where the CLI declared a full one (`calc e3b0c442…`, the hash of nothing). The same failure comes back through Traefik and through a port-forward, as grpc-web and as plain gRPC, with and without `--local-repo-root`, so it isn't the transport. Until it works, the warning is what the loop costs.
 
 ## A wave orders one Application, not what another one creates
 
-Sync waves order the resources of a single sync, and between waves Argo CD waits for what it just
-applied to become healthy. Root uses that to bring the platform up in order, and it works where
-health covers what an object delivers: it sat on `Application/apis` for thirty seconds while
-Crossplane settled. An ApplicationSet counts as healthy once it has generated its Applications,
-without waiting for them to sync, so the wave holding it was over in under a second, and the
-Applications it generates sync on their own time, after root has already finished.
+Sync waves order the resources of a single sync, and between waves Argo CD waits for what it just applied to become healthy. Root uses that to bring the platform up in order, and it works where health covers what an object delivers: it sat on `Application/apis` for thirty seconds while Crossplane settled. An ApplicationSet counts as healthy once it has generated its Applications, without waiting for them to sync, so the wave holding it was over in under a second, and the Applications it generates sync on their own time, after root has already finished.
 
-Reloader was where that showed. Its chart puts a Role in each namespace it watches, and those
-namespaces belong to the services' own Applications, so on a new cluster its first sync could land
-before them: two RBAC objects reported `SyncFailed` with `namespaces "hello-staging" not found`, and
-the Application called itself Healthy while staying OutOfSync until the namespace appeared.
+Reloader was where that showed. Its chart puts a Role in each namespace it watches, and those namespaces belong to the services' own Applications, so on a new cluster its first sync could land before them: two RBAC objects reported `SyncFailed` with `namespaces "hello-staging" not found`, and the Application called itself Healthy while staying OutOfSync until the namespace appeared.
 
-Holding the wave until the services sync doesn't cure that. With a health check that keeps the
-ApplicationSet Progressing until every Application it generated has synced, root's operation waits
-for as long as one service can't sync, and Argo CD starts no other sync of root meanwhile, so the
-platform's own changes stop landing. It also releases late: an ApplicationSet refreshes the sync
-status it lists only when it reconciles itself, which for the lab's services is every three
-minutes. The lab turns the chart's RBAC off instead. A ClusterRole ships with Reloader and each
-service's chart binds it in its own namespace; a Reloader that starts before that binding exists
-retries with a backoff and picks the namespace up within half a minute of it, without restarting.
+Holding the wave until the services sync doesn't cure that. With a health check that keeps the ApplicationSet Progressing until every Application it generated has synced, root's operation waits for as long as one service can't sync, and Argo CD starts no other sync of root meanwhile, so the platform's own changes stop landing. It also releases late: an ApplicationSet refreshes the sync status it lists only when it reconciles itself, which for the lab's services is every three minutes. The lab turns the chart's RBAC off instead. A ClusterRole ships with Reloader and each service's chart binds it in its own namespace; a Reloader that starts before that binding exists retries with a backoff and picks the namespace up within half a minute of it, without restarting.
 
 ## Moving a service between front doors costs a gap
 
-Traefik serves Ingress and Gateway API at the same time, so a service moves from one to the other by
-changing a parameter, and nothing about the service changes. The move is not seamless, though. Argo
-CD deletes the Ingress and creates the HTTPRoute in the same sync, and Traefik takes a moment to
-serve the new one, so the address stops answering for about two tenths of a second: measured twice,
-28 failed requests out of 1225 on one stage and 18 out of 645 on the other. One request per route
-would have found nothing, which is how a migration like this gets called seamless.
+Traefik serves Ingress and Gateway API at the same time, so a service moves from one to the other by changing a parameter, and nothing about the service changes. The move is not seamless, though. Argo CD deletes the Ingress and creates the HTTPRoute in the same sync, and Traefik takes a moment to serve the new one, so the address stops answering for about two tenths of a second: measured twice, 28 failed requests out of 1225 on one stage and 18 out of 645 on the other. One request per route would have found nothing, which is how a migration like this gets called seamless.
 
-The gap belongs to the swap, not to the route. A route created on its own starts serving within 66
-to 179 ms of `kubectl apply`, and only the first Gateway route a cluster ever gets costs an extra
-miss, while Traefik's provider wakes up.
+The gap belongs to the swap, not to the route. A route created on its own starts serving within 66 to 179 ms of `kubectl apply`, and only the first Gateway route a cluster ever gets costs an extra miss, while Traefik's provider wakes up.
 
 ## Letting teams create their namespaces
 
@@ -197,13 +144,7 @@ Delete a namespace that still holds managed resources and some of them can stay 
 
 ## A request goes before what it composed does
 
-Delete a request and it leaves the API almost at once: gone by the first reading, 68 ms after the
-delete, finalizer and all. What it composed takes longer. A managed resource the provider has to
-delete in the cloud stayed 6 s in one run and about 30 s in three others, inside the provider's
-one-minute poll; a bucket or a table, which it only lets go of, left within about a second. So
-waiting for the request to disappear hands back a lab that is still tearing down, and re-applying
-the same request then races a resource that is still terminating. `just reset` waits on the
-`crossplane.io/composite` label instead, which is what the composed resources carry.
+Delete a request and it leaves the API almost at once: gone by the first reading, 68 ms after the delete, finalizer and all. What it composed takes longer. A managed resource the provider has to delete in the cloud stayed 6 s in one run and about 30 s in three others, inside the provider's one-minute poll; a bucket or a table, which it only lets go of, left within about a second. So waiting for the request to disappear hands back a lab that is still tearing down, and re-applying the same request then races a resource that is still terminating. `just reset` waits on the `crossplane.io/composite` label instead, which is what the composed resources carry.
 
 ## Waves in an app of apps don't wait by default
 
