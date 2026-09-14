@@ -61,10 +61,23 @@ crossview() {
 
 # Its page answers before it can reach the cloud account, and the lab gives it no way to write there.
 stackport() {
-  curl -fsS http://stackport.localhost/api/health |
-    jq -er 'if .status != "ok" then error("its API answered \(.status)")
-            elif .writes_enabled then error("it can write to the cloud account: STACKPORT_ALLOW_WRITES in platform/stackport")
-            else "http://stackport.localhost (read-only)" end'
+  local status writes account
+  read -r status writes < <(curl -fsS http://stackport.localhost/api/health |
+    jq -r '[.status, (.writes_enabled | tostring)] | @tsv')
+  if [[ $status != ok ]]; then
+    echo "its API answered ${status:-nothing}"
+    return 1
+  fi
+  if [[ $writes == true ]]; then
+    echo "it can write to the cloud account: STACKPORT_ALLOW_WRITES in platform/stackport"
+    return 1
+  fi
+  account=$(curl -fsS http://stackport.localhost/api/endpoints | jq -r '.endpoints[0].health')
+  if [[ $account != healthy ]]; then
+    echo "it calls the cloud account $account, and its own page won't say so"
+    return 1
+  fi
+  echo "http://stackport.localhost (read-only)"
 }
 
 # It answers admission requests before any policy selects anything, so ask what it intercepts.
