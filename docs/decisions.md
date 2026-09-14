@@ -92,7 +92,7 @@ It asks with `bucket:` or `database:`, like everything else it needs, and the pl
 
 Argo CD never deletes a request the chart renders, whether the request leaves the service's values or the service's Application goes, and never prunes the APIs, since deleting an XRD deletes every request made through it. Crossplane never deletes a bucket or a table: their Compositions leave Delete out of what the provider may do, so a request that goes, by hand or with its namespace, leaves its data in the cloud account, and the same request applied again adopts it instead of starting empty. A versioned bucket keeps its versions, but versioning itself goes with the request and stays suspended until the request comes back: removing it is also how a request that stops asking for versioning turns it off. Removing data is an explicit operation in the account itself, which `just reset` carries out for the requests nobody committed.
 
-A database is protected another way, because its data lives in volumes CloudNativePG owns, where no policy of the provider reaches. The chart puts a Usage next to the request, so deleting the request by hand is refused with the Usage's reason, and Argo CD never deletes either of them. A namespace deleted with the database in it still takes the data along, and only backups would cover that ([Postgres in the cluster](#postgres-in-the-cluster-run-by-cloudnativepg)).
+A database is protected another way, because its data lives in volumes CloudNativePG owns, where no policy of the provider reaches. The chart puts a Usage next to the request, so deleting the request by hand is refused with the Usage's reason, and Argo CD never deletes either of them. A namespace deleted with the database in it still takes its volumes along. What stays is its backups, in the cloud account, and the same request asking for a restore starts from them ([how](#every-database-is-backed-up-from-the-moment-it-exists)).
 
 ### AWS providers built by crossplane-contrib
 
@@ -100,13 +100,23 @@ Upbound publishes the same providers, but only their latest version is free; con
 
 ### Postgres in the cluster, run by CloudNativePG
 
-It's the lab's example of an API built on a third-party operator rather than on a cloud provider, and the operator handles what a managed database would: replicas, failover and credentials. The emulator has an RDS of its own, which the lab doesn't use and hasn't tested. What the lab leaves out is what a company would set up first: backups to object storage, and a restore someone has actually run.
+It's the lab's example of an API built on a third-party operator rather than on a cloud provider, and the operator handles what a managed database would: replicas, failover and credentials. The emulator has an RDS of its own, which the lab doesn't use and hasn't tested.
 
-The Composition pins the Postgres image, so upgrading the operator doesn't move every database to a new Postgres on its own. It uses CloudNativePG's `standard` image rather than the `system` one the operator still defaults to. The `system` images are deprecated, and the `standard` ones are built to work with backup plugins such as Barman Cloud, which replaces the operator's built-in backup.
+The Composition pins the Postgres image, so upgrading the operator doesn't move every database to a new Postgres on its own. It uses CloudNativePG's `standard` image rather than the `system` one the operator still defaults to. The `system` images are deprecated, and the `standard` ones leave out the Barman tools the operator's built-in backup runs: backups come from the Barman Cloud plugin instead, which brings those tools in a container of its own next to Postgres.
 
 ### A database's size can change later, its disk can't
 
 A size sets how many instances run and how much memory each gets, and a service can move it up or down. It also sets the disk, but only when the database is created. From then on the Composition keeps the disk the cluster already has. No volume can shrink, and kind's storage class can't grow one: a database here that asked for a bigger disk stopped short of everything else it asked for, and still read as Ready ([what that looks like](platform-notes.md#a-database-that-cant-grow-its-disk-still-reads-healthy)). On storage that grows, a company would give the disk a field of its own that only goes up.
+
+### Every database is backed up from the moment it exists
+
+A `Database` asks for a `Bucket` of its own and keeps its backups there, so they follow a bucket's rules: they stay when the request goes, and the same request finds them again when it comes back. The Barman Cloud plugin sends every change to that bucket as it happens, takes a full backup as soon as archiving works and every night after that, and keeps seven days. A new database isn't created until its bucket is ready, and it reads as not ready while its archiving fails, so a database that isn't being backed up doesn't pass for a healthy one.
+
+The plugin is what CloudNativePG offers now: the operator's built-in Barman support is deprecated since 1.26. It needs cert-manager for the certificates it and the operator talk over. A company would keep backups in another account, with versioning and object lock on the bucket, keep them longer and rehearse restores on a schedule. The lab's emulator keeps them in memory, so restarting it loses them.
+
+### A restore is part of the request, read when the database is created
+
+`restore: {}` starts a database from the latest point its backups reach, and `restore: {at: <time>}` from a moment in them. Like the disk, it counts only when the database is created: restoring a database that exists means deleting it, Usage first, and letting it come back with `restore`. The restored database goes on archiving into the folder it came from, on a new timeline, so the moments before the restore stay within reach. A database created empty where an earlier one left backups is refused archiving instead, and stays not ready until it's restored or those backups are removed.
 
 ### A bucket that exists keeps the name it was created with
 

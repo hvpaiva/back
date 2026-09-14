@@ -64,7 +64,7 @@ Every service is deployed by the same chart, `charts/app`, fed by the service's 
 | a size: small, medium or large | replicas, CPU and memory for each size |
 | whether it's public | the address: `<name>.<stage>.localhost`, `<name>.localhost` in production |
 | a bucket, with or without versioning | its name, region and credentials, and that removing it never deletes the data |
-| a database, small, medium or large | how many instances run, the memory for each and the disk it starts with, and that removing it never deletes the data |
+| a database, small, medium or large, and whether it starts from its backups | how many instances run, the memory for each and the disk it starts with, its backups, and that removing it never deletes the data |
 | | non-root user, read-only filesystem, no Kubernetes API token |
 
 `values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed without touching a single service repository: hello is served through Traefik's Gateway in staging and through an Ingress in production, decided one stage at a time in the ApplicationSet, and hello's own values mention neither.
@@ -75,7 +75,7 @@ Every service is deployed by the same chart, `charts/app`, fed by the service's 
 
 ### Argo CD and what it delivers
 
-`just up` installs Argo CD from its Helm chart and applies the projects and `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp, Crossplane, CloudNativePG and the cluster's RBAC, then the platform's APIs, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
+`just up` installs Argo CD from its Helm chart and applies the projects and `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp, Crossplane, CloudNativePG, cert-manager and the cluster's RBAC, then the platform's APIs and CloudNativePG's backup plugin, whose certificates need cert-manager, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
 
 | Project | May read from | May deliver to | Cluster-wide objects |
 |---|---|---|---|
@@ -100,19 +100,19 @@ Services call them at `main`, so a fix reaches all of them at once.
 
 ### Crossplane and the platform's APIs
 
-`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS providers for S3, SQS and DynamoDB, and their connection to the cloud account. The S3 provider alone ships 50 resource types; Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`. CloudNativePG, the operator databases are built on, comes from its own Application, `platform/apps/cloudnative-pg.yaml`.
+`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS providers for S3, SQS and DynamoDB, and their connection to the cloud account. The S3 provider alone ships 50 resource types; Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`. CloudNativePG, the operator databases are built on, comes from its own Application, `platform/apps/cloudnative-pg.yaml`, and its Barman Cloud plugin, which backs databases up, from `platform/apps/plugin-barman-cloud.yaml`.
 
 `platform/apis/` holds the APIs services request resources through, all in `back.lab/v1alpha1` and all namespaced:
 
 | Request | What the platform makes of it |
 |---|---|
 | `Bucket` | an S3 bucket named `<namespace>-<name>`, or just `<namespace>` when that already starts with the name, with versioning if asked for |
-| `Database` | a Postgres cluster that CloudNativePG runs in the namespace: one instance for small, two for medium and three for large, with a disk sized when it's created |
+| `Database` | a Postgres cluster that CloudNativePG runs in the namespace: one instance for small, two for medium and three for large, with a disk sized when it's created, and backups in a `Bucket` of its own that a restore starts from |
 | `Queue` | an SQS queue, plus a dead-letter queue where messages land after five failed deliveries |
 | `Table` | a DynamoDB table with the keys asked for, billed per request |
 | `Cache` | a Valkey server in the namespace, Redis-compatible, with a memory cap and a password of its own |
 
-Each one also composes the Secret the service reads its connection from: `<name>-bucket`, `<name>-database`, `<name>-queue`, `<name>-table`, `<name>-cache`. `Bucket` and `Database` are wired into the chart, with `bucket:` and `database:` in a service's values. A `Queue`, a `Table` or a `Cache` is requested by applying it to a namespace. `kubectl get buckets.back.lab -A` lists the requests, and `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became. Always name a request with its group, as in `databases.back.lab`: CloudNativePG has a `Database` kind of its own. [When something doesn't work](troubleshooting.md) follows that chain to the end.
+Each one also composes the Secret the service reads its connection from: `<name>-bucket`, `<name>-database`, `<name>-queue`, `<name>-table`, `<name>-cache`. An API can request another one, too: a `Database` asks for a `Bucket` called `<name>-backups` and reads its Secret the way a service would. `Bucket` and `Database` are wired into the chart, with `bucket:` and `database:` in a service's values. A `Queue`, a `Table` or a `Cache` is requested by applying it to a namespace. `kubectl get buckets.back.lab -A` lists the requests, and `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became. Always name a request with its group, as in `databases.back.lab`: CloudNativePG has a `Database` kind of its own. [When something doesn't work](troubleshooting.md) follows that chain to the end.
 
 ### Who can do what
 

@@ -9,6 +9,7 @@ Almost everything that breaks here breaks at a handoff between two tools, and ea
 | A request stays *Progressing* and never turns ready | [the request](#the-request) |
 | A request's kind doesn't exist right after its API was applied | [the request](#the-request) |
 | A database's INSTANCES stays below what its size asks for | [the request](#the-request) |
+| A database isn't ready: its archiving fails, or its restore never finishes | [the request](#the-request) |
 | The service starts but can't reach what it asked for | [the request](#the-request), then [the cloud account](#the-cloud-account) |
 | The page doesn't answer at all | [the service](#the-service) |
 | `just up` stops at `kind create cluster` | [the cluster](#the-cluster-wont-come-up) |
@@ -71,9 +72,21 @@ kubectl -n cnpg-system logs deploy/cloudnative-pg --tail=30
 
 An INSTANCES count that stays below its total means the cluster stopped short, even when the request and the cluster both read as ready, and the operator's log says where ([one way that happens](platform-notes.md#a-database-that-cant-grow-its-disk-still-reads-healthy)).
 
+A database's backups show on its request as well: LAST BACKUP in that same line, and in its YAML `restorableFrom`, the earliest moment a restore can go back to. A database whose status says `archiving: failing` isn't ready, and the plugin's container says why:
+
+```sh
+kubectl -n hello-staging logs hello-postgres-1 -c plugin-barman-cloud | grep -i error
+```
+
+`Expected empty archive` means the database started empty where an earlier one left its backups, which is what happens when Argo CD brings back the request of a database that was deleted. Restore it, or remove those backups from its bucket if nobody wants them ([why it refuses](platform-notes.md#a-database-cant-archive-into-backups-that-arent-its-own)). A restore that never finishes shows as a job, `<name>-postgres-1-full-recovery`, whose pods keep failing, and its log names what Postgres refused. `requested timeline 3 is not a child of this server's history` has a way out ([more](platform-notes.md#a-restore-can-start-from-a-timeline-another-restore-left-behind)).
+
 ## The cloud account
 
-The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory: restart it and every bucket, queue and table is gone, while Crossplane still believes they exist. Crossplane notices within a minute and creates them again ([why this emulator](decisions.md#ministack-as-the-cloud-account-pinned-by-digest)).
+The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory: restart it and every bucket, queue and table is gone, databases' backups included, while Crossplane still believes they exist. Crossplane notices within a minute and creates them again ([why this emulator](decisions.md#ministack-as-the-cloud-account-pinned-by-digest)). A database goes on archiving into its new, empty bucket, but has no full backup to restore from until the next night: within five minutes its status stops naming the lost one, and `just check` says the database was never backed up. Deleting its backup schedule takes a full backup straight away, since the platform composes the schedule again at once:
+
+```sh
+kubectl -n hello-staging delete scheduledbackups.postgresql.cnpg.io hello-backups
+```
 
 ```sh
 aws s3 ls
@@ -107,7 +120,7 @@ aws dynamodb delete-table --table-name hello-staging-visits
 
 `just reset` takes both steps for every request nobody committed. A request Git holds comes back on Argo CD's next sync and adopts what it had.
 
-A database's request is refused while the Usage next to it exists. Deleting a database on purpose starts with that Usage (`kubectl -n hello-staging delete usages.protection.crossplane.io hello-database`), and the database's volumes go with its request. For a request Git holds, Argo CD then puts both back on its next sync, with an empty database. `just reset` deletes the Usages nobody committed before the requests they protect.
+A database's request is refused while the Usage next to it exists. Deleting a database on purpose starts with that Usage (`kubectl -n hello-staging delete usages.protection.crossplane.io hello-database`), and the database's volumes go with its request, while its backups stay in its bucket. For a request Git holds, Argo CD then puts both back on its next sync, with an empty database that refuses to archive over those backups until it's restored or they're removed. With `restore: {}` under `database:` in the service's values beforehand, it comes back with its data instead ([try it](experiments.md#lose-a-database-and-get-it-back)). `just reset` deletes the Usages nobody committed before the requests they protect, and the backups of the databases it deletes.
 
 Delete requests before their namespace: a namespace deleted with managed resources still in it can get stuck, and so can they ([platform notes](platform-notes.md#deleting-a-namespace-can-strand-its-managed-resources)).
 

@@ -7,6 +7,7 @@ The lab is put together to be changed, not only read, and each of these says wha
 | [Ask the platform for something](#ask-the-platform-for-something) | A request becomes cloud resources and a Secret, and the trace shows each step | A running lab |
 | [Delete a request, keep its data](#delete-a-request-keep-its-data) | Data outlives the request that created it | A running lab |
 | [Try to delete a service's database](#try-to-delete-a-services-database) | A Usage refuses a delete that RBAC allows | A running lab |
+| [Lose a database and get it back](#lose-a-database-and-get-it-back) | A deleted database comes back from its backups, as it last was or as it was at a given moment | A running lab |
 | [Change what a service was given](#change-what-a-service-was-given) | A changed Secret rolls the pods that read it | A running lab |
 | [Look at it as a developer](#look-at-it-as-a-developer) | A developer reads the cluster and changes it only through Git | A running lab |
 | [Watch Git win](#watch-git-win) | Argo CD undoes a change made in the cluster | A running lab |
@@ -17,7 +18,7 @@ The lab is put together to be changed, not only read, and each of these says wha
 | [Resize a service and watch it promote](#resize-a-service-and-watch-it-promote) | The developer's loop, from a push to production | Your forks |
 | [Change the golden path for every service at once](#change-the-golden-path-for-every-service-at-once) | One chart change reaches every service | Your forks |
 
-When one of them leaves something behind, `just reset` takes out the requests nobody committed, with the Usages applied by hand to protect them and the buckets and tables they leave in the cloud account. It puts every Application back under Git, without rebuilding the lab. It leaves your edits alone: `git status` says which files you changed, and `git checkout` on them drops the changes.
+When one of them leaves something behind, `just reset` takes out the requests nobody committed, with the Usages applied by hand to protect them and the buckets and tables they leave in the cloud account, a database's backups among them. It puts every Application back under Git, without rebuilding the lab. It leaves your edits alone: `git status` says which files you changed, and `git checkout` on them drops the changes.
 
 ## Using the platform
 
@@ -71,7 +72,48 @@ kubectl --context platform-admin -n hello-staging delete databases.back.lab hell
 admission webhook "nousages.protection.crossplane.io" denied the request: This resource is in-use by 1 usage(s), including the *v1beta1.Usage "hello-database" (in namespace "hello-staging") with reason: "holds hello's data; delete this Usage first to delete the database on purpose".
 ```
 
-The refusal comes from Crossplane. It labels whatever a Usage points at, and its webhook turns away a delete of anything that carries the label. Argo CD never deletes the request or its Usage, so taking `database:` out of hello's values would leave both in place. A Usage doesn't stop a namespace deletion, though, and the database goes with its namespace ([why](decisions.md#a-services-data-outlives-its-request)).
+The refusal comes from Crossplane. It labels whatever a Usage points at, and its webhook turns away a delete of anything that carries the label. Argo CD never deletes the request or its Usage, so taking `database:` out of hello's values would leave both in place. A Usage doesn't stop a namespace deletion, though: the database goes with its namespace, and what's left of it is its backups ([getting it back](#lose-a-database-and-get-it-back)).
+
+### Lose a database and get it back
+
+A database's backups live in the cloud account, so they outlive the database. The example request is a database nobody depends on:
+
+```sh
+kubectl apply -f platform/apis/database/example.yaml
+kubectl -n hello-staging wait --for=condition=ready databases.back.lab/orders --timeout=5m
+kubectl -n hello-staging exec orders-postgres-1 -c postgres -- psql app -c "create table notes (body text)" -c "insert into notes values ('before')"
+sleep 2 && date -u +%FT%TZ && sleep 2
+kubectl -n hello-staging exec orders-postgres-1 -c postgres -- psql app -c "insert into notes values ('after')"
+kubectl -n hello-staging get databases.back.lab orders
+```
+
+The request turns ready in under a minute, and LAST BACKUP fills in a few seconds later: the plugin takes a full backup as soon as archiving works, and sends every change after that as it happens. Keep the time `date` printed between the two inserts, and delete the database:
+
+```sh
+kubectl -n hello-staging delete databases.back.lab orders
+aws s3 ls s3://hello-staging-orders-backups/orders-postgres/
+```
+
+The request, the cluster and its volume go, and the bucket still holds `base/` and `wals/`. Apply the example again, which is what Argo CD would do for a request Git holds, and the database comes back empty: READY stays False, and `kubectl -n hello-staging get databases.back.lab orders -o yaml` says `archiving: failing`, because the plugin won't write a new database's changes over the old one's backups. Delete it again and ask for a restore instead:
+
+```sh
+kubectl -n hello-staging delete databases.back.lab orders
+kubectl apply -f - <<'EOF'
+apiVersion: back.lab/v1alpha1
+kind: Database
+metadata:
+  name: orders
+  namespace: hello-staging
+spec:
+  restore: {}
+EOF
+kubectl -n hello-staging wait --for=condition=ready databases.back.lab/orders --timeout=5m
+kubectl -n hello-staging exec orders-postgres-1 -c postgres -- psql app -c "select * from notes"
+```
+
+Both rows are back, about 40 seconds after the request, and the restored database goes on archiving where it came from. With `restore: {at: "<the time you kept>"}` instead, only `before` comes back. A service asks for the same thing with `restore: {}` under `database:` in its values, and the platform team deletes the Usage and the database so that Argo CD brings it back restored ([why it works that way](decisions.md#a-restore-is-part-of-the-request-read-when-the-database-is-created)).
+
+`just reset` takes out the request and its backups.
 
 ### Change what a service was given
 
@@ -129,7 +171,7 @@ Within a minute the managed bucket stops being ready, and a few seconds later it
 kubectl -n hello-staging describe buckets.s3.aws.m.upbound.io
 ```
 
-`--replicas=1` brings it back: about half a minute later the managed bucket is ready again, the request follows, and the buckets exist once more, because the emulator lost its state and Crossplane creates what it believes in.
+`--replicas=1` brings it back: about half a minute later the managed bucket is ready again, the request follows, and the buckets exist once more, because the emulator lost its state and Crossplane creates what it believes in. hello's databases turn not ready as well while the account is away, since their backups have nowhere to go, and come back without a full backup to restore from ([taking one](troubleshooting.md#the-cloud-account)).
 
 Most of what goes wrong here has that shape, one handoff at a time: [when something doesn't work](troubleshooting.md).
 

@@ -134,6 +134,10 @@ A DynamoDB key is typed with a single letter: S, N or B. Written into a Composit
 
 A Composition runs from scratch on every reconcile, so a password generated in its template would be a different password every time, and the service would be left holding the old one. The `Cache` Composition reads the password back from the Secret it composed and generates one only when there's nothing to read. The `Database` Composition does the same with the disk, which it takes from the cluster it already made rather than from the size. Anything the platform can't recompute has to come from somewhere that keeps it: what was already composed, or whatever generated it in the first place.
 
+### A resource that reports no readiness never counts as ready
+
+function-auto-ready marks a request ready once everything it composed is. Neither CloudNativePG's ScheduledBackup nor the backup plugin's ObjectStore reports a `Ready` condition, and a Database composing them stayed *Creating*, "Unready resources: schedule, store", however long they had existed. The Composition marks both ready itself with function-go-templating's `gotemplating.fn.crossplane.io/ready` annotation, and uses the same annotation to mark a database's cluster not ready while its archiving fails.
+
 ### Drift is checked every ten minutes
 
 A provider compares each managed resource with the cloud every ten minutes by default, so a bucket deleted by hand comes back up to ten minutes later. The lab sets one minute (`--poll=1m`, in `platform/crossplane/providers.yaml`), which costs an API call per resource per minute: fine here, worth measuring with thousands of resources.
@@ -145,6 +149,20 @@ Crossplane turns each XRD into a CRD, and the API server checks that CRD only wh
 ### A Composition reading someone else's resource asks for it by name
 
 A Composition can read a resource it didn't create, like the Secret CloudNativePG writes with a database's credentials. function-go-templating finds such a resource by name and namespace, or by labels. By labels, the lookup ignores the namespace and matches across the whole cluster, so a request could end up reading another namespace's Secret. The `Database` Composition asks for the Secret by name, in the request's namespace.
+
+## Backups
+
+### Postgres reports archiving as working with nowhere to archive to
+
+CloudNativePG sets a cluster's `ContinuousArchiving` condition from what Postgres's archive command returns, and a cluster with no backups configured returns success. hello's databases, which had run for two hours without backups, had the condition at `True` before the plugin arrived. The backup schedule the Composition created on that signal took its first backup before the operator saw the plugin in the cluster's spec, and it failed: "cannot proceed with the backup as the cluster has no plugin configured". That failure is final, and the next attempt would have been at midnight. The operator's code waits for a pod to be ready before backing it up, but not for the plugin to be in it, so a backup that reached a pod still waiting to restart with the plugin would fail for good as well. The Composition creates the schedule once the plugin has reported from the primary, which it does as its container starts there, or straight away for a database created with backups in place, whose pods have the plugin from the start.
+
+### A database can't archive into backups that aren't its own
+
+Before its first archive, the Barman Cloud plugin checks that the folder it archives into is empty, and refuses otherwise ("Expected empty archive"). That's what stops an empty database, created where an earlier one left its backups, from writing over them: its archiving fails, and the Composition keeps it not ready. A backup started by hand on that database wrote its first file into the old folder and never finished; a later restore from the folder ignored it. The same check refuses a database restored from its own folder, since the folder holds the very backups it came from: the job that restores it failed and was retried for as long as it ran. The annotation `cnpg.io/skipEmptyWalArchiveCheck: enabled` skips the check, and the Composition sets it only on a database it restores. The restored database goes on archiving into the same folder, on a new timeline, and the old timeline's files stay as they were.
+
+### A restore can start from a timeline another restore left behind
+
+Every restore branches a new timeline off the database's history, and it picks its full backup by time: the latest one before the moment asked for, or the latest of all. In a drill, a database was restored to its latest point, on a timeline that then took a full backup of its own, and restored again to a moment before that first restore, which branched a third timeline off the first. It was lost a couple of seconds later, before the third timeline had a full backup. A restore to the latest point then started from the second timeline's backup, and Postgres refused to follow the third timeline from there, "requested timeline 3 is not a child of this server's history", on every retry of the job that restores it. Nothing was lost: a restore to a moment just before that backup started from the first timeline's, which the third one does descend from, and came back with the data. A restored database takes a full backup of its own within about half a minute, which is how long that window stays open.
 
 ## Deleting requests
 
