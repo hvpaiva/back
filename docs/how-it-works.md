@@ -2,6 +2,15 @@
 
 The lab has two kinds of users. A developer wants to ship a service without learning Kubernetes. The platform team wants every service to run the same safe way without reviewing each one.
 
+A service asking for a database crosses all four tools. The dashed notes mark where one tool relies on another, which is where most of the platform's own configuration lives.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/request-flow-dark.svg">
+  <img src="images/request-flow.svg" alt="A request for a database, in order: the developer asks Backstage, which opens a pull request on the service's staging branch; CI renders the chart and runs the platform's policies; after the merge Argo CD reads the branch and applies the Deployment and the Database, which Kyverno admits; Crossplane creates a CloudNativePG cluster, reads back the Secret it writes, and composes the service's own Secret with PG* keys; the new pods start once that Secret exists, Argo CD turns healthy when the Database is Ready, and Backstage shows all of it.">
+</picture>
+
+The diagram's source is `images/request-flow.excalidraw`.
+
 ## Shipping a change (the developer's side)
 
 The service's repository has everything the developer touches: code, tests, a CI workflow, and a `charts/<service>/` folder that says what the service needs.
