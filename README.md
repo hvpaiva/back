@@ -7,7 +7,7 @@ A local lab where Backstage, Argo CD, Crossplane and Kyverno are already wired t
 
 Everything runs on your machine, in a kind cluster, with MiniStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
 
-> Work in progress: Argo CD, the delivery path for services and the first platform APIs (buckets, queues, tables and caches, through Crossplane) are in place; databases, Kyverno and Backstage are being added.
+> Work in progress: Argo CD, the delivery path for services and the first platform APIs (buckets, queues, tables and caches, through Crossplane) are in place, and Kyverno is installed with no policy of its own yet; databases and Backstage are being added.
 
 ## What this is, and what it isn't
 
