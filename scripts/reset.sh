@@ -39,11 +39,20 @@ still_composed() { # namespace/kind/name...
 }
 
 left_in_account() { # namespace kind name
-  local uid
-  uid=$(kubectl --namespace "$1" get "$2.back.lab" "$3" --output jsonpath='{.metadata.uid}')
-  kubectl --namespace "$1" get managed --output json | jq -r --arg uid "$uid" '
-    .items[]
-    | select(any(.metadata.ownerReferences[]?; .uid == $uid))
+  local owners new
+  owners=$(kubectl --namespace "$1" get "$2.back.lab" "$3" --output jsonpath='{.metadata.uid}')
+  # A request can compose other requests, and what those leave in the account is still this one's.
+  while new=$(kubectl --namespace "$1" get "$kinds" --output json | jq -r --arg owners "$owners" '
+      ($owners | split(" ")) as $known
+      | .items[]
+      | select(any(.metadata.ownerReferences[]?; .uid as $uid | $known | index($uid)))
+      | .metadata.uid | select(. as $uid | $known | index($uid) | not)') && [[ -n $new ]]; do
+    owners="$owners $(paste -sd' ' - <<<"$new")"
+  done
+  kubectl --namespace "$1" get managed --output json | jq -r --arg owners "$owners" '
+    ($owners | split(" ")) as $known
+    | .items[]
+    | select(any(.metadata.ownerReferences[]?; .uid as $uid | $known | index($uid)))
     | select((.spec.managementPolicies // ["*"]) | any(.[]; . == "Delete" or . == "*") | not)
     | [.kind, .metadata.annotations["crossplane.io/external-name"]] | @tsv'
 }
