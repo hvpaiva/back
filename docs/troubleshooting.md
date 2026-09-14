@@ -1,8 +1,6 @@
 # When something doesn't work
 
-Almost everything that breaks here breaks at a handoff between two tools, and each handoff has a
-place where it says why. This is the order to walk them, and the commands are the same ones the
-platform team would run in a real cluster.
+Almost everything that breaks here breaks at a handoff between two tools, and each handoff has a place where it says why. This is the order to walk them, and the commands are the same ones the platform team would run in a real cluster.
 
 | What you see | Start at |
 |---|---|
@@ -13,24 +11,19 @@ platform team would run in a real cluster.
 | The page doesn't answer at all | [the service](#the-service) |
 | `just up` stops at `kind create cluster` | [the cluster](#the-cluster-wont-come-up) |
 
-Run everything from this directory: `mise.toml` points kubectl, the argocd CLI and the AWS CLI at
-the lab.
+Run everything from this directory: `mise.toml` points kubectl, the argocd CLI and the AWS CLI at the lab.
 
-A step of `just up` that fails prints what the tool said, right there. Every run also appends it to
-`.logs/lab.log`, with the command and the time, which is where to read the run before this one.
+A step of `just up` that fails prints what the tool said, right there. Every run also appends it to `.logs/lab.log`, with the command and the time, which is where to read the run before this one.
 
 ## The cluster won't come up
 
-`kind create cluster` fails when something else holds port 80, 443 or 4566, usually another cluster
-or a container from another project. Docker names it without sudo:
+`kind create cluster` fails when something else holds port 80, 443 or 4566, usually another cluster or a container from another project. Docker names it without sudo:
 
 ```sh
 docker ps --filter publish=80
 ```
 
-`ss -ltnp` shows only `docker-proxy` for those ports, and needs sudo to show that much. Deleting
-another kind cluster has a catch: do it from outside this directory, or `KUBECONFIG` points at the
-lab's own file and the other cluster's context stays behind in `~/.kube/config`.
+`ss -ltnp` shows only `docker-proxy` for those ports, and needs sudo to show that much. Deleting another kind cluster has a catch: do it from outside this directory, or `KUBECONFIG` points at the lab's own file and the other cluster's context stays behind in `~/.kube/config`.
 
 ## The Application
 
@@ -39,19 +32,11 @@ argocd app get hello-staging              # or: just argocd-login platform-admin
 argocd app get hello-staging --refresh    # check the repository now, instead of within a minute
 ```
 
-Sync status and health answer different questions. *Synced* means the cluster holds what Git says,
-and *Healthy* means what it holds is working. A service that deploys a broken image is Synced and
-Degraded; a service whose last commit never arrived is OutOfSync and Healthy.
+Sync status and health answer different questions. *Synced* means the cluster holds what Git says, and *Healthy* means what it holds is working. A service that deploys a broken image is Synced and Degraded; a service whose last commit never arrived is OutOfSync and Healthy.
 
-An Application's health only counts its own resources, and the managed resources a request creates
-aren't among them: what happens to them reaches the Application through the request or not at all.
-The platform adds a health check for its own kinds, which reads a request that isn't ready as
-*Progressing* and one Crossplane can't process as *Degraded*, and the tree in the UI shows which
-level it came from.
+An Application's health only counts its own resources, and the managed resources a request creates aren't among them: what happens to them reaches the Application through the request or not at all. The platform adds a health check for its own kinds, which reads a request that isn't ready as *Progressing* and one Crossplane can't process as *Degraded*, and the tree in the UI shows which level it came from.
 
-Two things are worth knowing before hunting further: Argo CD polls every minute here, and it
-answers `permission denied` for an Application that doesn't exist. Both are in
-[platform notes](platform-notes.md).
+Two things are worth knowing before hunting further: Argo CD polls every minute here, and it answers `permission denied` for an Application that doesn't exist. Both are in [platform notes](platform-notes.md).
 
 ## The request
 
@@ -61,10 +46,7 @@ A request becomes managed resources, and each of those talks to something outsid
 crossplane resource trace buckets.back.lab hello -n hello-staging
 ```
 
-The tree shows both conditions for every level. `SYNCED` means Crossplane reconciled the resource
-without an error; `READY` means whatever is on the other side reports it exists. Synced but not
-Ready is normal for a few seconds after a request, and permanent when the other side is refusing
-something.
+The tree shows both conditions for every level. `SYNCED` means Crossplane reconciled the resource without an error; `READY` means whatever is on the other side reports it exists. Synced but not Ready is normal for a few seconds after a request, and permanent when the other side is refusing something.
 
 The message is on the managed resource, not on the request:
 
@@ -73,15 +55,11 @@ kubectl -n hello-staging describe buckets.s3.aws.m.upbound.io   # conditions and
 kubectl -n crossplane-system logs -l pkg.crossplane.io/provider=provider-aws-s3 --tail=30
 ```
 
-If the request produced nothing at all, the Composition itself failed. Crossplane records that on
-the request (`kubectl -n hello-staging describe buckets.back.lab hello`), and `just render bucket`
-reproduces it on your machine, without the cluster.
+If the request produced nothing at all, the Composition itself failed. Crossplane records that on the request (`kubectl -n hello-staging describe buckets.back.lab hello`), and `just render bucket` reproduces it on your machine, without the cluster.
 
 ## The cloud account
 
-The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory:
-restart it and every bucket, queue and table is gone, while Crossplane still believes they exist.
-It notices within a minute and creates them again.
+The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory: restart it and every bucket, queue and table is gone, while Crossplane still believes they exist. It notices within a minute and creates them again.
 
 ```sh
 aws s3 ls
@@ -98,32 +76,21 @@ kubectl -n hello-staging logs deploy/hello
 kubectl -n hello-staging get events --sort-by=.lastTimestamp | tail
 ```
 
-A pod stuck in `ContainerCreating` is usually waiting for a Secret it mounts: the request that
-composes it isn't ready yet, and the pod starts on its own once it is. `ImagePullBackOff` on a
-fork means the package GitHub created is private.
+A pod stuck in `ContainerCreating` is usually waiting for a Secret it mounts: the request that composes it isn't ready yet, and the pod starts on its own once it is. `ImagePullBackOff` on a fork means the package GitHub created is private.
 
-The route is separate from the pod. If the pod is Running and the address doesn't answer, check
-that the service asked to be public (`public: true` in its values) and that whichever front door
-serves that stage is there: `kubectl -n hello-staging get ingress,httproute`. Which of the two it is
-comes from the ApplicationSet, not from the service.
+The route is separate from the pod. If the pod is Running and the address doesn't answer, check that the service asked to be public (`public: true` in its values) and that whichever front door serves that stage is there: `kubectl -n hello-staging get ingress,httproute`. Which of the two it is comes from the ApplicationSet, not from the service.
 
 ## Starting over
 
-The platform's requests hold data, so nothing deletes it on its own. Argo CD never prunes them, and
-a bucket or a table outlives its request: delete one by hand and its data stays in the cloud
-account, where applying the same request again picks it back up. Removing the data is a second,
-explicit step, in the account:
+The platform's requests hold data, so nothing deletes it on its own. Argo CD never prunes them, and a bucket or a table outlives its request: delete one by hand and its data stays in the cloud account, where applying the same request again picks it back up. Removing the data is a second, explicit step, in the account:
 
 ```sh
 kubectl -n hello-staging delete tables.back.lab visits
 aws dynamodb delete-table --table-name hello-staging-visits
 ```
 
-`just reset` takes both steps for every request nobody committed. A request Git holds comes back on
-Argo CD's next sync and adopts what it had.
+`just reset` takes both steps for every request nobody committed. A request Git holds comes back on Argo CD's next sync and adopts what it had.
 
-Delete requests before their namespace: a namespace deleted with managed resources still in it can
-get stuck, and so can they ([platform notes](platform-notes.md)).
+Delete requests before their namespace: a namespace deleted with managed resources still in it can get stuck, and so can they ([platform notes](platform-notes.md)).
 
-`just down && just up` rebuilds everything from scratch in a few minutes, and the services come back
-at the versions Git says they run.
+`just down && just up` rebuilds everything from scratch in a few minutes, and the services come back at the versions Git says they run.
