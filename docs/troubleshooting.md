@@ -109,15 +109,21 @@ comes from the ApplicationSet, not from the service.
 
 ## Starting over
 
-Deleting a request deletes what it created, and the platform's requests hold data, so Argo CD never
-prunes them on its own. Deleting one by hand is the explicit operation:
+The platform's requests hold data, so nothing deletes it on its own. Argo CD never prunes them, and
+a bucket or a table outlives its request: delete one by hand and its data stays in the cloud
+account, where applying the same request again picks it back up. Removing the data is a second,
+explicit step, in the account:
 
 ```sh
-kubectl -n hello-staging delete buckets.back.lab hello
+kubectl -n hello-staging delete tables.back.lab visits
+aws dynamodb delete-table --table-name hello-staging-visits
 ```
 
-Delete requests before their namespace: a namespace deleted with managed resources still in it gets
-stuck, and so do they ([platform notes](platform-notes.md)).
+`just reset` takes both steps for every request nobody committed. A request Git holds comes back on
+Argo CD's next sync and adopts what it had.
+
+Delete requests before their namespace: a namespace deleted with managed resources still in it can
+get stuck, and so can they ([platform notes](platform-notes.md)).
 
 `just down && just up` rebuilds everything from scratch in a few minutes, and the services come back
 at the versions Git says they run.

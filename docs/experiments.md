@@ -5,9 +5,10 @@ They come in three kinds: the first group needs nothing but a running lab, the s
 that keeps a change off Git until you want it there, and the last two need your own copies of the
 repositories. Everything runs from this directory, where `mise.toml` points the tools at the lab.
 
-When one of them leaves something behind, `just reset` takes out the requests nobody committed and
-puts every Application back under Git, without rebuilding the lab. It leaves your edits alone: `git
-status` says which files you changed, and `git checkout` on them drops the changes.
+When one of them leaves something behind, `just reset` takes out the requests nobody committed, with
+the buckets and tables they leave in the cloud account, and puts every Application back under Git,
+without rebuilding the lab. It leaves your edits alone: `git status` says which files you changed,
+and `git checkout` on them drops the changes.
 
 ## Using the platform
 
@@ -34,6 +35,33 @@ cluster's other custom resources.
 
 No service uses that one. `Bucket` is the only request the chart renders today, from `bucket:` in a
 service's values; the others exist so the platform offers more than one kind of thing.
+
+### Delete a request, keep its data
+
+A table holds data as soon as something writes to it, which makes the table example a good one to
+delete:
+
+```sh
+kubectl apply -f platform/apis/table/example.yaml
+kubectl -n hello-staging wait --for=condition=ready tables.back.lab/visits
+aws dynamodb put-item --table-name hello-staging-visits --item '{"page":{"S":"/"},"seenAt":{"N":"1"}}'
+kubectl -n hello-staging delete tables.back.lab visits
+aws dynamodb scan --table-name hello-staging-visits --query Count
+```
+
+The request is gone within a second, and so is the managed resource Crossplane made for it, but the
+scan still counts the item: the Composition leaves Delete out of what the provider may do with a
+table, and a bucket's does the same. Apply the example again and it's ready in about a second,
+because nothing gets created: the new request finds the table where the old one left it, item and
+all.
+
+```sh
+kubectl apply -f platform/apis/table/example.yaml
+kubectl -n hello-staging wait --for=condition=ready tables.back.lab/visits
+aws dynamodb scan --table-name hello-staging-visits --query Count
+```
+
+Taking the data away is a step of its own, in the account, and `just reset` takes it for you.
 
 ### Change what a service was given
 

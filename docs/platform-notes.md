@@ -191,19 +191,19 @@ That mapping is Argo CD's own. Asked about a managed resource with `Synced=True`
 
 The S3 provider ships 50 resource types and the activation policy turns on two; the rest get a definition but no CRD. Argo CD's built-in check for Crossplane's kinds knows nothing about activation, so under the provider in Argo CD's tree, 48 definitions stayed *Progressing*, "Provisioning ...", for good. Nothing was wrong, and the Application stayed *Healthy*: it only counts its own resources. `platform/argocd/values.yaml` shows inactive definitions as *Suspended*. The new check only showed after a hard refresh of the Application (`argocd app get crossplane --hard-refresh`); until then, the definitions, which never change, kept the health the old check had given them.
 
-## Deleting a namespace strands its managed resources
+## Deleting a namespace can strand its managed resources
 
-Delete a namespace that still holds a managed resource and the resource stays behind, stuck on its finalizer, and so does the namespace. To reach the cloud, the provider first records that the resource uses its ProviderConfig, in an object it creates in the same namespace; a terminating namespace refuses new objects, so the provider never gets as far as deleting anything. Restarting it doesn't help. It's an open Crossplane bug ([crossplane-runtime#1150](https://github.com/crossplane/crossplane-runtime/issues/1150)). Delete the requests first, then the namespace. If one is already stuck, delete the external resource by hand if it still exists, then remove the finalizer.
+Delete a namespace that still holds managed resources and some of them can stay behind, stuck on their finalizer, and the namespace with them. Before every reconcile, the provider records that the resource uses its ProviderConfig, in an object it keeps in the same namespace. The namespace controller deletes those records along with everything else, and a terminating namespace refuses new ones, so from then on the provider fails before doing anything, without a word in the resource's status. A bucket or a table can leave without touching the cloud account, since the platform never lets the provider delete them, but only if the provider got to it before its record went: in three namespaces, one of two stayed stuck, then two of four, then none. Restarting the provider doesn't help. It's an open Crossplane bug ([crossplane-runtime#1150](https://github.com/crossplane/crossplane-runtime/issues/1150)). Delete the requests first, then the namespace. If one is already stuck, remove its finalizer; whatever it created is still in the cloud account, and removing it there is a separate decision.
 
 ## A request goes before what it composed does
 
 Delete a request and it leaves the API almost at once: gone by the first reading, 68 ms after the
-delete, finalizer and all. What it composed takes longer. The managed resource behind a bucket
-stayed 6 s in one run and 30 s in another, both well inside the provider's one-minute poll, while
-the bucket itself had already left the account by that first reading. So waiting for the request to
-disappear hands back a lab that is still tearing down, and re-applying the same request then races a
-resource that is still terminating. `just reset` waits on the `crossplane.io/composite` label
-instead, which is what the composed resources carry.
+delete, finalizer and all. What it composed takes longer. A managed resource the provider has to
+delete in the cloud stayed 6 s in one run and about 30 s in three others, inside the provider's
+one-minute poll; a bucket or a table, which it only lets go of, left within about a second. So
+waiting for the request to disappear hands back a lab that is still tearing down, and re-applying
+the same request then races a resource that is still terminating. `just reset` waits on the
+`crossplane.io/composite` label instead, which is what the composed resources carry.
 
 ## Waves in an app of apps don't wait by default
 

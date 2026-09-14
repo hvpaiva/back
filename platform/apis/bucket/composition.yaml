@@ -41,6 +41,8 @@ spec:
                 {{ setResourceNameAnnotation "bucket" }}
                 crossplane.io/external-name: {{ $bucket }}
             spec:
+              # No Delete: the bucket outlives its request, and the same request adopts it again.
+              managementPolicies: [Observe, Create, Update, LateInitialize]
               forProvider:
                 region: {{ $region }}
             {{- if $xr.spec.versioning }}

@@ -31,6 +31,8 @@ spec:
                 {{ setResourceNameAnnotation "table" }}
                 crossplane.io/external-name: {{ $table }}
             spec:
+              # No Delete: the table outlives its request, and the same request adopts it again.
+              managementPolicies: [Observe, Create, Update, LateInitialize]
               forProvider:
                 region: {{ $region }}
                 # Billed per request, so nobody has to size read and write capacity.
