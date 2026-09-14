@@ -173,7 +173,7 @@ Ingress:
 ```
 
 ```sh
-just diff root                                     # one parameter on one Application changes
+just diff root                                     # one line of the ApplicationSet's list changes
 just local root
 kubectl -n hello-production get ingress,httproute
 curl -s -o /dev/null -w '%{http_code}\n' http://hello.localhost
