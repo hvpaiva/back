@@ -6,7 +6,8 @@ that keeps a change off Git until you want it there, and the last two need your 
 repositories. Everything runs from this directory, where `mise.toml` points the tools at the lab.
 
 When one of them leaves something behind, `just reset` takes out the requests nobody committed and
-puts every Application back under Git, without rebuilding the lab. It leaves your edits alone.
+puts every Application back under Git, without rebuilding the lab. It leaves your edits alone: `git
+status` says which files you changed, and `git checkout` on them drops the changes.
 
 ## Using the platform
 
@@ -144,14 +145,15 @@ it back is the half worth watching, because the request never stops being the sa
 
 ```sh
 just gitops                                        # hand it back to Git
-kubectl -n hello-staging get pods -w               # a new pod some fifteen seconds later, then Ctrl-C
+kubectl -n hello-staging get pods -w               # the pod is replaced, then Ctrl-C
 kubectl -n hello-staging logs deploy/sessions-cache | grep -m1 version=
 ```
 
-Now it names Valkey. `just gitops` returns well before any of that: Argo CD has to notice Git again,
-Crossplane has to write the Deployment back, and the pod has to be replaced. Across both log lines
-the Secret keeps its keys, the Service keeps its address, and anything reading them notices nothing:
-that's what an API buys over a template. Then clean up after yourself:
+Now it names Valkey. `just gitops` hands the folder back on the spot, and the rest follows from
+there: Argo CD compares against Git again, Crossplane writes the Deployment back, and the pod is
+replaced. Across both log lines the Secret keeps its keys, the Service keeps its address, and
+anything reading them notices nothing: that's what an API buys over a template. Then clean up after
+yourself:
 
 ```sh
 kubectl -n hello-staging delete caches.back.lab sessions
@@ -186,7 +188,12 @@ same sync, and Traefik needs a moment to pick the route up. Hammer it and you'll
 
 Nothing in back-hello changed, which is the whole point: the front door is the platform's business,
 and a service that had to be edited for this would be a service the platform can't migrate on its
-own. `just gitops` puts it back.
+own. Then clean up after yourself:
+
+```sh
+just gitops
+git checkout platform/apps/applicationset.yaml
+```
 
 ### Add a field to an API
 
@@ -227,7 +234,12 @@ The Queue "emails" is invalid: spec.fifo: Invalid value: true: A queue can't swi
 ```
 
 That sentence is in the definition (`self == oldSelf`), and the API server says it at `kubectl apply`
-time, whoever is applying and whatever they are applying from.
+time, whoever is applying and whatever they are applying from. Then clean up after yourself:
+
+```sh
+kubectl -n hello-staging delete queues.back.lab emails
+git checkout platform/apis/cache
+```
 
 ## With your own forks
 
