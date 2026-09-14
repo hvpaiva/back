@@ -7,7 +7,7 @@ A local lab where Backstage, Argo CD, Crossplane and Kyverno are already wired t
 
 Everything runs on your machine, in a kind cluster, with MiniStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
 
-> Work in progress: Argo CD, the delivery path for services and the first platform APIs (buckets, queues, tables and caches, through Crossplane) are in place, and Kyverno is installed with no policy of its own yet; databases and Backstage are being added.
+> Work in progress: Argo CD, the delivery path for services and the first platform APIs (buckets, queues, tables and caches, through Crossplane) are in place, and Kyverno is installed with no policy of its own yet; databases, Backstage and Kargo are being added.
 
 ## What this is, and what it isn't
 
@@ -15,55 +15,7 @@ It's a lab. The four tools are already wired together, so you can use the platfo
 
 What carries over to a real platform is the shape of it: the contracts between the tools, the APIs, the chart, and who owns what. What doesn't is the infrastructure underneath, which is a stage set: one node, no TLS, local accounts instead of single sign-on, and an AWS emulator that no longer gets updates. [Decisions](docs/decisions.md) says what a company would do instead, where the difference matters.
 
-It isn't a course either. It doesn't teach each tool from scratch; their own documentation does that better.
-
-## Using it, and changing it
-
-Two halves, and they want different things from you. Both assume the lab is running, which is the next section.
-
-### Using the platform
-
-Argo CD, the services and what they asked for. `kubectl apply -f platform/apis/queue/example.yaml` asks for a queue the way a service would, `crossplane resource trace queues.back.lab emails -n hello-staging` shows what the platform made of it, and hello's page shows what it was given: its version, its size, and whether it reaches its bucket. As `dev`, you see the cluster the way a developer would, and you can't change it.
-
-### Changing the platform
-
-The loop, in the order you'd reach for it:
-
-- `just render <api>` takes one of the folders under `platform/apis/` (`bucket`, `queue`, `table`, `cache`) and prints what that request would create, in a second and without a cluster, checked against the schemas.
-- `just render-service [path]` does the same for a service through the platform's chart, for every stage, the way CI validates a pull request. Without an argument it renders `../back-hello/charts/hello`.
-- `just diff <app>` takes an Argo CD Application (`apis` delivers the APIs above; `kubectl -n argocd get applications` lists them all) and shows what applying its folder from here would change in the cluster.
-- `just local <app>` applies it instead of what Git says, and `just gitops` hands it back.
-
-One thing doesn't bend: a change to `charts/app` reaches the cluster by push. Argo CD syncs only single-source Applications from disk, and a service's has two, the chart here and the service's own values. `just render-service` is the fast half of that loop, and your own forks, further down, are the other half.
-
-[Things to try](docs/experiments.md) walks both and says what you should see, and [when something doesn't work](docs/troubleshooting.md) is the order to look in.
-
-## Run it
-
-Tested on Ubuntu 24.04 and Omarchy, where `setup.sh` also installs what's missing; the rest of the Arch family installs the same way. On other systems it runs the same checks and tells you what to install.
-
-```sh
-git clone https://github.com/hvpaiva/back.git && cd back
-./setup.sh   # checks this machine and offers to install what's missing, asking first
-just up      # creates the cluster and waits until everything is healthy (a few minutes)
-```
-
-`setup.sh` checks Docker, free ports (80, 443, 4566), RAM, disk and the tools pinned in `mise.toml`, and can add a line to your shell rc that activates [mise](https://mise.jdx.dev). Joining the `docker` group, which it offers to do, is equivalent to root on that machine: anyone in it can start a container that mounts the whole filesystem. If mise isn't active in your shell, prefix commands with `mise exec --`, as in `mise exec -- just up`.
-
-| What | Where |
-|---|---|
-| Argo CD | http://argocd.localhost (user `dev` or `platform-admin`, password from `just argocd-password <user>`) |
-| kubectl | From this directory: `kubectl --context dev` or `--context platform-admin` |
-| Headlamp | http://headlamp.localhost (token from `just headlamp-token`) |
-| Crossview | http://crossview.localhost (the requests, what each composed, and the providers behind them) |
-| hello | http://hello.staging.localhost and http://hello.localhost |
-| Traefik | http://traefik.localhost/dashboard/ |
-| The cloud account | http://stackport.localhost (what the platform created in it), or `aws s3 ls` from this directory |
-| Crossplane | Crossview, above, or `kubectl get providers,functions` |
-
-`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 5 to 7 GB of RAM and 8 GB of disk: opening the dashboards costs the better part of a gigabyte, and where it lands in that range also varies by machine.
-
-Run this way, the lab follows the repositories above on GitHub: everything works and you can inspect all of it. Argo CD reads GitHub rather than your disk, so changing what it deploys means either handing one folder to your working copy with `just local`, or running from your own forks, further down.
+It isn't a course either. It doesn't teach each tool from scratch; their own documentation does that better. It assumes you know your way around Kubernetes and Helm, and the idea behind GitOps.
 
 ## What's already here
 
@@ -90,6 +42,45 @@ Argo CD installs and upgrades everything from Git, itself included. One chart tu
 The diagram's source is `docs/images/architecture.excalidraw`, which opens in [Excalidraw](https://excalidraw.com).
 
 [How it works](docs/how-it-works.md) follows both sides in detail, from the push to the running pods.
+
+## Run it
+
+Tested on Ubuntu 24.04 and Omarchy, where `setup.sh` also installs what's missing; the rest of the Arch family installs the same way. On other systems it runs the same checks and tells you what to install.
+
+```sh
+git clone https://github.com/hvpaiva/back.git && cd back
+./setup.sh   # checks this machine and offers to install what's missing, asking first
+just up      # creates the cluster and waits until everything is healthy (a few minutes)
+```
+
+`setup.sh` checks Docker, free ports (80, 443, 4566), RAM, disk and the tools pinned in `mise.toml`, and can add a line to your shell rc that activates [mise](https://mise.jdx.dev). Joining the `docker` group, which it offers to do, is equivalent to root on that machine: anyone in it can start a container that mounts the whole filesystem. If mise isn't active in your shell, prefix commands with `mise exec --`, as in `mise exec -- just up`.
+
+Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at the lab cluster only, and keeps their credentials in git-ignored folders here rather than in your home directory. AWS calls go to the lab's cloud account with dummy credentials, even if real AWS profiles are configured, and so do those of Crossplane's AWS provider in the cluster. Host ports are bound to 127.0.0.1, so nothing is reachable from your network.
+
+| What | Where |
+|---|---|
+| Argo CD | http://argocd.localhost (user `dev` or `platform-admin`, password from `just argocd-password <user>`) |
+| kubectl | From this directory: `kubectl --context dev` or `--context platform-admin` |
+| Headlamp | http://headlamp.localhost (token from `just headlamp-token`) |
+| Crossview | http://crossview.localhost (the requests, what each composed, and the providers behind them) |
+| hello | http://hello.staging.localhost and http://hello.localhost |
+| Traefik | http://traefik.localhost/dashboard/ |
+| The cloud account | http://stackport.localhost (what the platform created in it), or `aws s3 ls` from this directory |
+| Crossplane | Crossview, above, or `kubectl get providers,functions` |
+
+`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 5 to 7 GB of RAM and 8 GB of disk: opening the dashboards costs the better part of a gigabyte, and where it lands in that range also varies by machine.
+
+Run this way, the lab deploys what this repository and back-hello hold on GitHub: everything works and you can inspect all of it. Argo CD reads GitHub rather than your disk, so changing what it deploys means either handing one folder to your working copy with `just local`, or running from your own forks, further down.
+
+## First steps
+
+Once `just up` is done:
+
+1. Open http://hello.staging.localhost and http://hello.localhost: the same service in two stages, each showing the version it runs.
+2. Log in to http://argocd.localhost as `dev`, then as `platform-admin` (`just argocd-password <user>` prints each password). The developer sees the services; the platform team sees everything that delivers them too.
+3. Ask the platform for a queue and follow what it becomes, the [first thing to try](docs/experiments.md#ask-the-platform-for-something).
+
+From there, [things to try](docs/experiments.md) goes on with the rest.
 
 ## Run it from your own GitHub
 
@@ -128,8 +119,11 @@ In this repository:
 - `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, CloudNativePG, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages, its permissions and its connection to the cloud account, and `platform/crossview/` the read access the UI over it runs with; `platform/apis/` holds the APIs services request resources through, each with the example request `just render` and `kubectl apply` take; `platform/rbac/` says what each team can see.
 - `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls: `go.yaml` checks Go services, `delivery.yaml` validates and ships any service.
 - `scripts/` holds what the longer `just` recipes run.
-- `docs/` explains [how it works](docs/how-it-works.md), suggests [things to try](docs/experiments.md), gives the order to look in [when something doesn't work](docs/troubleshooting.md), collects [notes on the problems we ran into](docs/platform-notes.md), and records [why it's built this way](docs/decisions.md).
 
-## Isolation
+## Documentation
 
-Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at the lab cluster only, and keeps their credentials in git-ignored folders here rather than in your home directory. AWS calls go to the lab's cloud account with dummy credentials, even if real AWS profiles are configured, and so do those of Crossplane's AWS provider in the cluster. Host ports are bound to 127.0.0.1, so nothing is reachable from your network.
+- [How it works](docs/how-it-works.md): the whole flow, from a developer's push to the running pods, and the platform behind it.
+- [Things to try](docs/experiments.md): using the platform and changing it, each saying what you should see.
+- [When something doesn't work](docs/troubleshooting.md): where to look, starting from what you see.
+- [Decisions](docs/decisions.md): why the lab is built this way, and what a company would do instead.
+- [Platform notes](docs/platform-notes.md): what isn't obvious until it bites, grouped by where it happens.
