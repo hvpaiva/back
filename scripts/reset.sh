@@ -18,11 +18,11 @@ applied_by_hand() { # kinds
     | [.metadata.namespace, (.kind | ascii_downcase), .metadata.name] | @tsv'
 }
 
-still_composed() { # request names
-  local name
-  for name in "$@"; do
-    kubectl get managed --all-namespaces --selector "crossplane.io/composite=$name" \
-      --output name 2>/dev/null | sed 's/\..*\//\//'
+still_composed() { # namespace/name...
+  local request
+  for request in "$@"; do
+    kubectl --namespace "${request%%/*}" get managed \
+      --selector "crossplane.io/composite=${request#*/}" --output name 2>/dev/null | sed 's/\..*\//\//'
   done
 }
 
@@ -34,18 +34,18 @@ mapfile -t requests < <(applied_by_hand "$kinds")
 if ((${#requests[@]} == 0)); then
   ok "no requests to remove: everything the platform holds, Git asked for"
 else
-  names=()
+  removed=()
   while IFS=$'\t' read -r namespace kind name; do
     kubectl --namespace "$namespace" delete "$kind" "$name" --wait=false >/dev/null
     ok "$kind/$name in $namespace, and what it created"
-    names+=("$name")
+    removed+=("$namespace/$name")
   done < <(printf '%s\n' "${requests[@]}")
 
   last=""
   for _ in $(seq 60); do
     mapfile -t remaining < <(
       applied_by_hand "$kinds" | cut -f2,3 | tr '\t' '/'
-      still_composed "${names[@]}"
+      still_composed "${removed[@]}"
     )
     ((${#remaining[@]} == 0)) && break
     pending=$(printf '%s\n' "${remaining[@]}" | paste -sd ' ' -)
