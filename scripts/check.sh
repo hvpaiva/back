@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Smoke-tests the lab from the host (just check): every component answers, every identity
-# authenticates, and hello runs in both stages and reaches its bucket.
+# authenticates, and hello runs in both stages and reaches its bucket and its database.
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
@@ -153,7 +153,8 @@ reloader() {
 hello() { # stage url
   web "$2/api/info" | jq -er --arg stage "$1" --arg url "$2" '
     if .bucket and (.bucket.reachable | not) then error("in \($stage), does not reach its bucket \(.bucket.name)")
-    else "\(.version) in \($stage)\(if .bucket then ", bucket \(.bucket.name)" else "" end), \($url)" end'
+    elif .database and (.database.reachable | not) then error("in \($stage), does not reach its database \(.database.host)")
+    else "\(.version) in \($stage)\(if .bucket then ", bucket \(.bucket.name)" else "" end)\(if .database then ", database \(.database.host)" else "" end), \($url)" end'
 }
 
 section "Checking the lab"
