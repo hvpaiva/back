@@ -59,10 +59,29 @@ case ${1:-} in
     section "Argo CD"
     if kubectl --namespace argocd get application argocd >/dev/null 2>&1; then
       ok "Argo CD already manages itself: change platform/argocd/values.yaml and push instead"
+      managers=$(kubectl --namespace argocd get configmap argocd-cm --show-managed-fields \
+        --output jsonpath='{.metadata.managedFields[*].manager}')
+      if [[ " $managers " == *" helm "* ]]; then
+        warn "Helm still co-owns what it installed here, so a field removed from platform/argocd/values.yaml would stay"
+        hint "just down && just up installs it again with Argo CD as its only owner"
+      fi
     else
-      run "Argo CD, chart $argocd_chart_version" helm upgrade --install argocd argo-cd \
-        --repo https://argoproj.github.io/argo-helm --version "$argocd_chart_version" \
-        --namespace argocd --create-namespace --values platform/argocd/values.yaml --wait || exit 1
+      work=$(mktemp -d)
+      trap 'rm -rf "$work"' EXIT
+      if ! kubectl get namespace argocd >/dev/null 2>&1; then
+        run "the argocd namespace" kubectl create namespace argocd || exit 1
+      fi
+      run "Argo CD, chart $argocd_chart_version, rendered with the lab's values" \
+        helm template argocd argo-cd --repo https://argoproj.github.io/argo-helm \
+        --version "$argocd_chart_version" --namespace argocd --values platform/argocd/values.yaml \
+        --kube-version "$(kubectl version --output json | jq -r .serverVersion.gitVersion)" \
+        --output-dir "$work" || exit 1
+      run "applied as argocd-controller, the field manager Argo CD applies with, so it owns every field" \
+        kubectl apply --server-side --field-manager=argocd-controller --recursive --filename "$work" || exit 1
+      run "Argo CD's deployments available" \
+        kubectl --namespace argocd wait --for=condition=Available deployment --all --timeout=5m || exit 1
+      run "its application controller running" \
+        kubectl --namespace argocd rollout status statefulset/argocd-application-controller --timeout=5m || exit 1
     fi
     run "the projects and the root Application" \
       kubectl apply --filename platform/apps/projects.yaml --filename platform/root.yaml || exit 1

@@ -4,7 +4,9 @@ Things that aren't obvious until they bite, collected while building the lab. Ea
 
 ## Argo CD can't install itself
 
-Something has to install Argo CD before it can manage anything. Here Helm installs it once (`just argocd`), and an Application in `platform/apps/argocd.yaml` then adopts that installation. Adoption only works if the Application renders exactly what Helm installed: same chart version, same release name, same values file. Get one of them wrong and Argo CD creates a second copy of itself next to the first.
+Something has to install Argo CD before it can manage anything. Here `just argocd` renders its Helm chart once and applies the result, and an Application in `platform/apps/argocd.yaml` then adopts that installation. Adoption only works if the Application renders exactly what was applied: same chart version, same release name, same values file. Get one of them wrong and Argo CD creates a second copy of itself next to the first.
+
+That first apply is server-side and uses `argocd-controller`, the field manager Argo CD applies with, so Argo CD owns every field from the start. Installed with `helm install`, Helm co-owns all of them, and a field only leaves an object once its last owner stops applying it: something removed from `platform/argocd/values.yaml` then stays in the cluster while Argo CD reports Synced, which is what five per-kind health keys did after a wildcard replaced them. A lab installed that way lists `helm` among argocd-cm's field managers, `just argocd` warns about it, and `just down && just up` reinstalls it with one owner. What the chart's install hooks used to order now settles on its own: the Job that creates Redis's password is refused until its ServiceAccount exists, and Redis fails until that Secret does, once or twice each.
 
 The root Application has a bootstrap problem of its own: it belongs to the `platform` project, which it creates. `just argocd` applies the projects before root, and root keeps them in sync from then on.
 

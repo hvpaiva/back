@@ -1,4 +1,4 @@
-# Adopts the Helm install from `just argocd`: chart version and release name must match it.
+# Adopts what `just argocd` applied from this chart: its version and release name must match.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
