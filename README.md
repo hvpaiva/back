@@ -61,7 +61,7 @@ just up      # creates the cluster and waits until everything is healthy (a few 
 | The cloud account | http://stackport.localhost (what the platform created in it), or `aws s3 ls` from this directory |
 | Crossplane | Crossview, above, or `kubectl get providers,functions` |
 
-`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 5 GB of RAM and 8 GB of disk.
+`just` lists every recipe, and `just down` deletes the cluster. The lab uses about 5 to 7 GB of RAM and 8 GB of disk: opening the dashboards costs the better part of a gigabyte, and where it lands in that range also varies by machine.
 
 Run this way, the lab follows the repositories above on GitHub: everything works and you can inspect all of it. Argo CD reads GitHub rather than your disk, so changing what it deploys means either handing one folder to your working copy with `just local`, or running from your own forks, further down.
 
