@@ -57,12 +57,17 @@ jobs:
             if [[ -f $CHART_DIR/values-$stage.yaml ]]; then
               args+=(--values "$CHART_DIR/values-$stage.yaml")
             fi
-            if errors=$(helm template "$SERVICE" .platform/charts/app "${args[@]}" --set "platform.stage=$stage" 2>&1 >/dev/null); then
-              echo "$stage: ok"
-            else
-              status=1
-              printf '%s: %s\n' "$stage" "$errors" | tee -a "$GITHUB_STEP_SUMMARY"
-            fi
+            # The platform picks which front door serves a stage, and can move a service between
+            # them without the service changing, so a pull request has to render both.
+            for route in ingress gateway; do
+              if errors=$(helm template "$SERVICE" .platform/charts/app "${args[@]}" \
+                --set "platform.stage=$stage" --set "platform.route=$route" 2>&1 >/dev/null); then
+                echo "$stage on $route: ok"
+              else
+                status=1
+                printf '%s on %s: %s\n' "$stage" "$route" "$errors" | tee -a "$GITHUB_STEP_SUMMARY"
+              fi
+            done
           done
           exit $status
 
