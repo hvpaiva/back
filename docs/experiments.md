@@ -1,6 +1,20 @@
 # Things to try
 
-The lab is put together to be changed, not only read, and each of these says what you should see. They come in three kinds: the first group needs nothing but a running lab, the second uses the loop that keeps a change off Git until you want it there, and the last two need your own copies of the repositories. Everything runs from this directory, where `mise.toml` points the tools at the lab.
+The lab is put together to be changed, not only read, and each of these says what to run and what you should see. The three groups differ in what they need: a running lab, a working copy of this repository, or your own forks. Everything runs from this directory, where `mise.toml` points the tools at the lab.
+
+| Try | What it shows | Needs |
+|---|---|---|
+| [Ask the platform for something](#ask-the-platform-for-something) | A request becomes cloud resources and a Secret, and the trace shows each step | A running lab |
+| [Delete a request, keep its data](#delete-a-request-keep-its-data) | Data outlives the request that created it | A running lab |
+| [Change what a service was given](#change-what-a-service-was-given) | A changed Secret rolls the pods that read it | A running lab |
+| [Look at it as a developer](#look-at-it-as-a-developer) | A developer reads the cluster and changes it only through Git | A running lab |
+| [Watch Git win](#watch-git-win) | Argo CD undoes a change made in the cluster | A running lab |
+| [Break it on purpose](#break-it-on-purpose) | How an outage in the cloud account travels up to the Application | A running lab |
+| [Change what a request is made of](#change-what-a-request-is-made-of) | The contract survives swapping what fulfills it | A working copy |
+| [Move a service to the other front door](#move-a-service-to-the-other-front-door) | The platform migrates a service without touching its repository | A working copy |
+| [Add a field to an API](#add-a-field-to-an-api) | How an API grows, and how it refuses a change | A working copy |
+| [Resize a service and watch it promote](#resize-a-service-and-watch-it-promote) | The developer's loop, from a push to production | Your forks |
+| [Change the golden path for every service at once](#change-the-golden-path-for-every-service-at-once) | One chart change reaches every service | Your forks |
 
 When one of them leaves something behind, `just reset` takes out the requests nobody committed, with the buckets and tables they leave in the cloud account, and puts every Application back under Git, without rebuilding the lab. It leaves your edits alone: `git status` says which files you changed, and `git checkout` on them drops the changes.
 
@@ -104,6 +118,15 @@ kubectl -n hello-staging describe buckets.s3.aws.m.upbound.io
 Most of what goes wrong here has that shape, one handoff at a time: [when something doesn't work](troubleshooting.md).
 
 ## Changing the platform
+
+These change files in your working copy and apply them without pushing. The loop, in the order you'd reach for it:
+
+- `just render <api>` takes one of the folders under `platform/apis/` (`bucket`, `queue`, `table`, `cache`) and prints what that request would create, in a second and without a cluster, checked against the schemas.
+- `just render-service [path]` does the same for a service through the platform's chart, for every stage, the way CI validates a pull request. Without an argument it renders `../back-hello/charts/hello`.
+- `just diff <app>` takes an Argo CD Application (`apis` delivers the APIs in `platform/apis/`; `kubectl -n argocd get applications` lists them all) and shows what applying its folder from here would change in the cluster.
+- `just local <app>` applies it instead of what Git says, and `just gitops` hands it back.
+
+A change to `charts/app` still reaches the cluster by push ([why](platform-notes.md#a-local-sync-sees-one-source-only)), which is what [your own forks](#with-your-own-forks) are for.
 
 ### Change what a request is made of
 
