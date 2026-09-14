@@ -16,8 +16,18 @@ spec:
       # Kubernetes would otherwise set STACKPORT_PORT to this Service's address, and the app reads
       # that name as its own port.
       enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: stackport
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           image: davireis/stackport:0.4.2@sha256:2b346e93aa8b6746b0e5c9ac25f3c12840f132fd591f6133d3141ab3591c2974
           ports:
             - name: http
@@ -35,6 +45,8 @@ spec:
               value: "false"
             - name: STACKPORT_LEARN
               value: "false"
+            - name: HOME
+              value: /tmp
           readinessProbe:
             httpGet:
               path: /api/health
@@ -45,7 +57,6 @@ spec:
               cpu: 50m
               memory: 128Mi
             limits:
-              # It settles near 460 MiB, and a ceiling there is one the next request crosses.
               memory: 1Gi
 ---
 apiVersion: v1
