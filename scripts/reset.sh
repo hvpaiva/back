@@ -22,11 +22,19 @@ applied_by_hand() { # kinds
     | [.metadata.namespace, (.kind | ascii_downcase), .metadata.name] | @tsv'
 }
 
-still_composed() { # namespace/name...
+still_there() { # namespace/kind/name...
+  local request namespace kind name
+  for request in "$@"; do
+    IFS=/ read -r namespace kind name <<<"$request"
+    kubectl --namespace "$namespace" get "$kind.back.lab" "$name" --output name 2>/dev/null | sed 's/\..*\//\//'
+  done
+}
+
+still_composed() { # namespace/kind/name...
   local request
   for request in "$@"; do
     kubectl --namespace "${request%%/*}" get managed \
-      --selector "crossplane.io/composite=${request#*/}" --output name 2>/dev/null | sed 's/\..*\//\//'
+      --selector "crossplane.io/composite=${request##*/}" --output name 2>/dev/null | sed 's/\..*\//\//'
   done
 }
 
@@ -74,21 +82,38 @@ kinds=$(request_kinds)
 mapfile -t requests < <(applied_by_hand "$kinds")
 left=()
 
+# A Usage refuses deleting what it protects, so the ones applied by hand go before the requests.
+mapfile -t usages < <(applied_by_hand usages.protection.crossplane.io)
+for usage in "${usages[@]}"; do
+  IFS=$'\t' read -r namespace _ name <<<"$usage"
+  if errors=$(kubectl --namespace "$namespace" delete usages.protection.crossplane.io "$name" --timeout=60s 2>&1 >/dev/null); then
+    ok "usage/$name in $namespace"
+  else
+    fail "usage/$name in $namespace stays"
+    hint "$errors"
+  fi
+done
+
 if ((${#requests[@]} == 0)); then
   ok "no requests to remove: everything the platform holds, Git asked for"
 else
   removed=()
   while IFS=$'\t' read -r namespace kind name; do
-    mapfile -t -O "${#left[@]}" left < <(left_in_account "$namespace" "$kind" "$name")
-    kubectl --namespace "$namespace" delete "$kind.back.lab" "$name" --wait=false >/dev/null
+    mapfile -t leaves < <(left_in_account "$namespace" "$kind" "$name")
+    if ! errors=$(kubectl --namespace "$namespace" delete "$kind.back.lab" "$name" --wait=false 2>&1 >/dev/null); then
+      fail "$kind/$name in $namespace stays"
+      hint "${errors##*denied the request: }"
+      continue
+    fi
+    left+=("${leaves[@]}")
     ok "$kind/$name in $namespace, and what it created"
-    removed+=("$namespace/$name")
+    removed+=("$namespace/$kind/$name")
   done < <(printf '%s\n' "${requests[@]}")
 
   last=""
   for _ in $(seq 60); do
     mapfile -t remaining < <(
-      applied_by_hand "$kinds" | cut -f2,3 | tr '\t' '/'
+      still_there "${removed[@]}"
       still_composed "${removed[@]}"
     )
     ((${#remaining[@]} == 0)) && break
@@ -104,8 +129,10 @@ else
     fail "$pending didn't go in two minutes"
     hint "Crossplane keeps what it composed until the provider confirms the delete, so an"
     hint "unreachable cloud account looks exactly like this: just check says whether it answers"
-  else
+  elif ((${#removed[@]} == ${#requests[@]})); then
     ok "every request applied by hand is gone, and so is what it composed in the cluster"
+  elif ((${#removed[@]} > 0)); then
+    ok "the other requests are gone, and so is what they composed in the cluster"
   fi
 fi
 
