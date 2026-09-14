@@ -20,13 +20,42 @@ spec:
             {{- $xr := .observed.composite.resource }}
             {{- $observed := .observed.resources | default dict }}
             {{- $cluster := printf "%s-postgres" $xr.metadata.name }}
+            {{- $backups := printf "%s-backups" $xr.metadata.name }}
             {{- $sizes := dict
                   "small"  (dict "instances" 1 "disk" "1Gi"  "memory" "256Mi")
                   "medium" (dict "instances" 2 "disk" "5Gi"  "memory" "512Mi")
                   "large"  (dict "instances" 3 "disk" "10Gi" "memory" "1Gi") }}
             {{- $size := get $sizes $xr.spec.size }}
-            {{- /* A disk keeps its first size: volumes can't shrink, and not all of them can grow. */}}
-            {{- $disk := dig "postgres" "resource" "spec" "storage" "size" $size.disk $observed }}
+            {{- $existing := dig "postgres" "resource" dict $observed }}
+            {{- /* A disk keeps its first size and a database how it started: volumes can't shrink, not all of them can grow, and a restore only happens at creation. */}}
+            {{- $disk := dig "spec" "storage" "size" $size.disk $existing }}
+            {{- $recovery := dig "spec" "bootstrap" "recovery" dict $existing }}
+            {{- $restoring := not (empty $recovery) }}
+            {{- $target := dig "recoveryTarget" "targetTime" "" $recovery }}
+            {{- if and (not $existing) (hasKey $xr.spec "restore") }}
+              {{- $restoring = true }}
+              {{- $target = dig "at" "" $xr.spec.restore }}
+            {{- end }}
+            {{- $destination := dig "store" "resource" "spec" "configuration" "destinationPath" "" $observed }}
+            {{- $endpoint := dig "store" "resource" "spec" "configuration" "endpointURL" "" $observed }}
+            {{- with first (getExtraResources . "bucket") }}
+              {{- $destination = printf "s3://%s/" (index .resource.data "BUCKET_NAME" | b64dec) }}
+              {{- $endpoint = index .resource.data "AWS_ENDPOINT_URL" | b64dec }}
+            {{- end }}
+            {{- $bucketReady := false }}
+            {{- range dig "backups" "resource" "status" "conditions" (list) $observed }}
+              {{- if and (eq .type "Ready") (eq .status "True") }}{{ $bucketReady = true }}{{ end }}
+            {{- end }}
+            {{- /* Postgres reports archiving as working even with nowhere to archive to, so it only counts with the plugin in place. */}}
+            {{- $archiving := "" }}
+            {{- if dig "spec" "plugins" (list) $existing }}
+              {{- range dig "status" "conditions" (list) $existing }}
+                {{- if eq .type "ContinuousArchiving" }}{{ $archiving = .status }}{{ end }}
+              {{- end }}
+            {{- end }}
+            {{- $window := dig "store" "resource" "status" "serverRecoveryWindow" dict $observed }}
+            {{- $storeCreated := dig "store" "resource" "metadata" "creationTimestamp" "" $observed }}
+            {{- $clusterCreated := dig "metadata" "creationTimestamp" "" $existing }}
             ---
             # By name: a label selector here would search every namespace, not just the request's.
             apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
@@ -37,6 +66,51 @@ spec:
                 kind: Secret
                 matchName: {{ $cluster }}-app
                 namespace: {{ $xr.metadata.namespace }}
+              bucket:
+                apiVersion: v1
+                kind: Secret
+                matchName: {{ $backups }}-bucket
+                namespace: {{ $xr.metadata.namespace }}
+            ---
+            apiVersion: back.lab/v1alpha1
+            kind: Bucket
+            metadata:
+              name: {{ $backups }}
+              annotations:
+                {{ setResourceNameAnnotation "backups" }}
+            spec: {}
+            {{- /* The object store and the backup schedule report no readiness of their own: existing is enough. */}}
+            {{- if $destination }}
+            ---
+            apiVersion: barmancloud.cnpg.io/v1
+            kind: ObjectStore
+            metadata:
+              name: {{ $backups }}
+              annotations:
+                {{ setResourceNameAnnotation "store" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+            spec:
+              retentionPolicy: 7d
+              configuration:
+                destinationPath: {{ $destination }}
+                endpointURL: {{ $endpoint }}
+                s3Credentials:
+                  accessKeyId:
+                    name: {{ $backups }}-bucket
+                    key: AWS_ACCESS_KEY_ID
+                  secretAccessKey:
+                    name: {{ $backups }}-bucket
+                    key: AWS_SECRET_ACCESS_KEY
+                  region:
+                    name: {{ $backups }}-bucket
+                    key: AWS_REGION
+                wal:
+                  compression: gzip
+                data:
+                  compression: gzip
+            {{- end }}
+            {{- /* A new database waits until its backups have somewhere to go, and a restore needs them there. */}}
+            {{- if or $existing (and $destination $bucketReady) }}
             ---
             apiVersion: postgresql.cnpg.io/v1
             kind: Cluster
@@ -44,6 +118,13 @@ spec:
               name: {{ $cluster }}
               annotations:
                 {{ setResourceNameAnnotation "postgres" }}
+                {{- if $restoring }}
+                # A restored database goes on archiving where its backups came from, on a new timeline.
+                cnpg.io/skipEmptyWalArchiveCheck: enabled
+                {{- end }}
+                {{- if eq $archiving "False" }}
+                gotemplating.fn.crossplane.io/ready: "False"
+                {{- end }}
             spec:
               instances: {{ $size.instances }}
               imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
@@ -55,6 +136,52 @@ spec:
                   memory: {{ $size.memory }}
                 limits:
                   memory: {{ $size.memory }}
+              {{- if $destination }}
+              plugins:
+                - name: barman-cloud.cloudnative-pg.io
+                  isWALArchiver: true
+                  parameters:
+                    barmanObjectName: {{ $backups }}
+              {{- end }}
+              {{- if $restoring }}
+              bootstrap:
+                recovery:
+                  source: backups
+                  {{- with $target }}
+                  recoveryTarget:
+                    targetTime: {{ . | quote }}
+                  {{- end }}
+              externalClusters:
+                - name: backups
+                  plugin:
+                    name: barman-cloud.cloudnative-pg.io
+                    parameters:
+                      barmanObjectName: {{ $backups }}
+                      serverName: {{ $cluster }}
+              {{- end }}
+            {{- end }}
+            {{- /* Once archiving works and the plugin runs in the pods (from birth, or reported from the primary): a backup any sooner fails for good. */}}
+            {{- $bornWithBackups := and $storeCreated $clusterCreated (le $storeCreated $clusterCreated) }}
+            {{- if or (hasKey $observed "schedule") (and (eq $archiving "True") (or $bornWithBackups (hasKey $window $cluster))) }}
+            ---
+            apiVersion: postgresql.cnpg.io/v1
+            kind: ScheduledBackup
+            metadata:
+              name: {{ $backups }}
+              annotations:
+                {{ setResourceNameAnnotation "schedule" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+            spec:
+              cluster:
+                name: {{ $cluster }}
+              # Seconds first: midnight, every day.
+              schedule: "0 0 0 * * *"
+              immediate: true
+              backupOwnerReference: self
+              method: plugin
+              pluginConfiguration:
+                name: barman-cloud.cloudnative-pg.io
+            {{- end }}
             {{- with first (getExtraResources . "credentials") }}
             ---
             apiVersion: v1
@@ -71,12 +198,25 @@ spec:
               PGPASSWORD: {{ index .resource.data "password" }}
               DATABASE_URL: {{ index .resource.data "uri" }}
             {{- end }}
+            {{- $recoverable := get $window $cluster | default dict }}
             ---
             apiVersion: back.lab/v1alpha1
             kind: Database
             status:
-              instances: {{ printf "%v/%v" (dig "postgres" "resource" "status" "readyInstances" 0 $observed) $size.instances | quote }}
+              instances: {{ printf "%v/%v" (dig "status" "readyInstances" 0 $existing) $size.instances | quote }}
               disk: {{ $disk }}
+              {{- if or $archiving $recoverable }}
+              backups:
+                {{- with $recoverable.firstRecoverabilityPoint }}
+                restorableFrom: {{ . | quote }}
+                {{- end }}
+                {{- with $recoverable.lastSuccessfulBackupTime }}
+                lastBackup: {{ . | quote }}
+                {{- end }}
+                {{- if $archiving }}
+                archiving: {{ ternary "working" "failing" (eq $archiving "True") }}
+                {{- end }}
+              {{- end }}
     - step: ready
       functionRef:
         name: function-auto-ready

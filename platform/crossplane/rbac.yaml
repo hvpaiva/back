@@ -9,5 +9,8 @@ metadata:
 rules:
   # Database
   - apiGroups: [postgresql.cnpg.io]
-    resources: [clusters]
+    resources: [clusters, scheduledbackups]
+    verbs: ["*"]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
     verbs: ["*"]

@@ -29,6 +29,7 @@ rules:
       - sqs.aws.m.upbound.io
       - dynamodb.aws.m.upbound.io
       - postgresql.cnpg.io
+      - barmancloud.cnpg.io
     resources: ["*"]
     verbs: [get, list, watch]
 ---

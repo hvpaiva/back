@@ -1,0 +1,11 @@
+# The backup plugin ships no read role, so this puts its object stores in the view role the developer role aggregates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: objectstores-view
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+rules:
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get, list, watch]

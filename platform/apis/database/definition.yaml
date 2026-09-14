@@ -21,6 +21,9 @@ spec:
         - name: DISK
           type: string
           jsonPath: .status.disk
+        - name: LAST BACKUP
+          type: date
+          jsonPath: .status.backups.lastBackup
       schema:
         openAPIV3Schema:
           type: object
@@ -33,6 +36,14 @@ spec:
                   enum: [small, medium, large]
                   default: small
                   description: How many instances run and how much memory each gets; the disk is sized from it once, at creation.
+                restore:
+                  type: object
+                  description: Start from the database's own backups instead of empty. Read once, when the database is created.
+                  properties:
+                    at:
+                      type: string
+                      format: date-time
+                      description: The moment to go back to, as an RFC 3339 time; the latest the backups reach when left out.
             status:
               type: object
               properties:
@@ -42,3 +53,15 @@ spec:
                 disk:
                   type: string
                   description: The disk each instance has, sized when the database was created.
+                backups:
+                  type: object
+                  properties:
+                    restorableFrom:
+                      type: string
+                      description: The earliest moment a restore can go back to.
+                    lastBackup:
+                      type: string
+                      description: When the last full backup finished. Every change since is archived as it happens.
+                    archiving:
+                      type: string
+                      description: Whether changes are reaching the backups, working or failing.
