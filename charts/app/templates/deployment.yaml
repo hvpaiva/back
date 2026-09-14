@@ -63,10 +63,20 @@ spec:
             - name: BUCKET_VERSIONING
               value: {{ .Values.bucket.versioning | default false | quote }}
             {{- end }}
-          {{- if kindIs "map" .Values.bucket }}
+            {{- if kindIs "map" .Values.database }}
+            - name: DATABASE_SIZE
+              value: {{ .Values.database.size | default "small" | quote }}
+            {{- end }}
+          {{- if or (kindIs "map" .Values.bucket) (kindIs "map" .Values.database) }}
           envFrom:
+            {{- if kindIs "map" .Values.bucket }}
             - secretRef:
                 name: {{ .Values.application.name }}-bucket
+            {{- end }}
+            {{- if kindIs "map" .Values.database }}
+            - secretRef:
+                name: {{ .Values.application.name }}-database
+            {{- end }}
           {{- end }}
           readinessProbe:
             httpGet:

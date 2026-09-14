@@ -44,6 +44,13 @@
         "versioning": { "type": "boolean" }
       }
     },
+    "database": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "size": { "enum": ["small", "medium", "large"] }
+      }
+    },
     "platform": {
       "type": "object",
       "additionalProperties": false,

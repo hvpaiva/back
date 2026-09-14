@@ -24,6 +24,10 @@ public: false
 # Its name and credentials reach the service as BUCKET_NAME and AWS_* variables.
 bucket: null
 
+# A Postgres database: `{}`, or `size: medium` or `large` for more instances and memory.
+# Its address and credentials reach the service as PG* variables and DATABASE_URL.
+database: null
+
 # Set by the platform's ApplicationSet, never by services.
 platform:
   stage: staging

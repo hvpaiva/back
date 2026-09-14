@@ -1,0 +1,30 @@
+{{- if kindIs "map" .Values.database }}
+apiVersion: back.lab/v1alpha1
+kind: Database
+metadata:
+  name: {{ .Values.application.name }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    # It holds data: dropping `database:` or deleting the service leaves it in place.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  size: {{ .Values.database.size | default "small" }}
+---
+# While this exists, deleting the database by hand is refused; it stays when `database:` goes.
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: {{ .Values.application.name }}-database
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  of:
+    apiVersion: back.lab/v1alpha1
+    kind: Database
+    resourceRef:
+      name: {{ .Values.application.name }}
+  reason: holds {{ .Values.application.name }}'s data; delete this Usage first to delete the database on purpose
+{{- end }}
