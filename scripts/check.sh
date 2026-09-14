@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Smoke-tests the lab from the host (just check): every component answers, every identity
-# authenticates, and hello runs in both stages and reaches its bucket and its database.
+# authenticates, hello runs in both stages and reaches its bucket and its database, and every
+# database has a recent backup.
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
@@ -157,6 +158,26 @@ hello() { # stage url
     else "\(.version) in \($stage)\(if .bucket then ", bucket \(.bucket.name)" else "" end)\(if .database then ", database \(.database.host)" else "" end), \($url)" end'
 }
 
+# Backups run daily: none in 25 hours means one was missed, unless the database is minutes old.
+backups() {
+  kubectl get databases.back.lab --all-namespaces --output json | jq -er '
+    def age(time): now - (time | fromdateiso8601);
+    [.items[] | {
+      name: "\(.metadata.namespace)/\(.metadata.name)",
+      young: (age(.metadata.creationTimestamp) < 600),
+      archiving: .status.backups.archiving,
+      last: .status.backups.lastBackup
+    }] as $all
+    | ($all | map(select(.archiving == "failing") | .name)) as $failing
+    | ($all | map(select(.last == null and (.young | not)) | .name)) as $never
+    | ($all | map(select(.last != null and age(.last) > 90000) | .name)) as $missed
+    | if ($all | length) == 0 then "no databases to back up"
+      elif ($failing | length) > 0 then error("archiving is failing for \($failing | join(", ")): kubectl describe databases.back.lab")
+      elif ($never | length) > 0 then error("never backed up: \($never | join(", "))")
+      elif ($missed | length) > 0 then error("no backup in the last 25 hours for \($missed | join(", "))")
+      else $all | map(if .last then "\(.name) \(age(.last) / 60 | floor)m ago" else "\(.name) waiting for its first" end) | join(", ") end'
+}
+
 section "Checking the lab"
 report gateway gateway
 report cloud cloud
@@ -170,4 +191,5 @@ report kyverno kyverno
 scripts/identities.sh check || problems=$((problems + 1))
 report hello hello staging http://hello.staging.localhost
 report hello hello production http://hello.localhost
+report backups backups
 if ((problems > 0)); then exit 1; fi
