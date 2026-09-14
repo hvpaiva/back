@@ -82,18 +82,12 @@ Two perspectives on the same cluster, each with an identity to see it through: `
 
 Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs: a service's request for a bucket becomes an S3 bucket in the lab's cloud account, with the platform's defaults. As `platform-admin`, you see all of it.
 
-```mermaid
-flowchart LR
-    dev([Developer]) -- git push --> hello["back-hello<br/>code + charts/hello"]
-    hello -- "CI: test, build" --> ghcr[(ghcr.io)]
-    hello -. "CI commits the new image<br/>to values-staging.yaml" .-> hello
-    argocd[Argo CD] -- reads --> hello
-    argocd -- "reads the platform" --> back["back<br/>platform/ + charts/app"]
-    argocd -- applies --> cluster["kind cluster<br/>hello-staging<br/>hello-production"]
-    ghcr -- "image" --> cluster
-    cluster -- "requests a bucket" --> crossplane[Crossplane]
-    crossplane -- "creates it" --> cloud[(MiniStack)]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
+  <img src="docs/images/architecture.svg" alt="The lab's architecture: a developer pushes to the service's repository or starts from Backstage; the platform's workflows build the image, Kargo promotes it into the service's stage branches, Argo CD reads the platform and the service's values and applies them through Kyverno, and Crossplane turns a service's requests into Postgres, Valkey and resources in MiniStack.">
+</picture>
+
+The diagram's source is `docs/images/architecture.excalidraw`, which opens in [Excalidraw](https://excalidraw.com).
 
 [How it works](docs/how-it-works.md) follows both sides in detail, from the push to the running pods.
 
