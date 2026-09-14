@@ -88,7 +88,7 @@ The S3 provider ships 50 resource types and the activation policy turns on two; 
 
 ### A database that can't grow its disk still reads healthy
 
-kind's storage class can't expand a volume. A CloudNativePG cluster that was asked for a bigger disk got no further than that step. The operator logged `error while changing PVC storage requirement` about every 40 seconds, created no new instance and applied no new memory, and the cluster still read as healthy, so the request stayed Ready too. Asking for the old size back was refused, because CloudNativePG compares a storage change with the size it was last given, not with the volume. The only sign was the request's INSTANCES column, which counts the instances ready out of those the size asks for and read `1/2`. That's why a database's disk is set once, when the database is created ([decision](decisions.md#a-databases-size-can-change-later-its-disk-cant)).
+kind's storage class can't expand a volume. A CloudNativePG cluster that was asked for a bigger disk got no further than that step. The operator logged `error while changing PVC storage requirement` about every 40 seconds, created no new instance and applied no new memory, and the cluster still read as healthy, so the request stayed Ready too. Asking for the old size back was refused, because CloudNativePG compares a storage change with the size it was last given, not with the volume. The only sign was the request's INSTANCES column, which counts the instances ready out of those the size asks for and read `1/2`. That's why a database's disk is set once, when the database is created ([why](decisions.md#a-databases-size-can-change-later-its-disk-cant)).
 
 ## Services and teams
 

@@ -71,7 +71,7 @@ kubectl --context platform-admin -n hello-staging delete databases.back.lab hell
 admission webhook "nousages.protection.crossplane.io" denied the request: This resource is in-use by 1 usage(s), including the *v1beta1.Usage "hello-database" (in namespace "hello-staging") with reason: "holds hello's data; delete this Usage first to delete the database on purpose".
 ```
 
-The refusal comes from Crossplane. It labels whatever a Usage points at, and its webhook turns away a delete of anything that carries the label. Argo CD never deletes either object, so taking `database:` out of hello's values would leave both in place. A Usage doesn't stop a namespace deletion, though, and the database goes with its namespace ([why](decisions.md#a-services-data-outlives-its-request)).
+The refusal comes from Crossplane. It labels whatever a Usage points at, and its webhook turns away a delete of anything that carries the label. Argo CD never deletes the request or its Usage, so taking `database:` out of hello's values would leave both in place. A Usage doesn't stop a namespace deletion, though, and the database goes with its namespace ([why](decisions.md#a-services-data-outlives-its-request)).
 
 ### Change what a service was given
 
