@@ -90,9 +90,10 @@ warning is what the loop costs.
 ## A wave orders one Application, not what another one creates
 
 Sync waves order the resources of a single sync, and between waves Argo CD waits for what it just
-applied to become healthy. Root uses that to bring the platform up in order, and it works where there
-is health to wait for: it sat on `Application/apis` for thirty seconds while Crossplane settled. An
-ApplicationSet has no health at all, so the wave holding it was over in under a second, and the
+applied to become healthy. Root uses that to bring the platform up in order, and it works where
+health covers what an object delivers: it sat on `Application/apis` for thirty seconds while
+Crossplane settled. An ApplicationSet counts as healthy once it has generated its Applications,
+without waiting for them to sync, so the wave holding it was over in under a second, and the
 Applications it generates sync on their own time, after root has already finished.
 
 Reloader is where that shows. Its chart puts a Role in each namespace it watches, and those
