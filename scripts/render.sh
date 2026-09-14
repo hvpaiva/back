@@ -14,7 +14,7 @@ source scripts/lib.sh
 api=${1:-}
 dir=platform/apis/$api
 if [[ ! -d $dir ]]; then
-  echo "usage: $(basename "$0") <api> [crossplane render flags]" >&2
+  echo "usage: $(basename "$0") <api> [crossplane composition render flags]" >&2
   echo "apis: $(cd platform/apis && printf '%s ' */ | tr -d /)" >&2
   exit 2
 fi
@@ -28,7 +28,7 @@ cp "$dir/definition.yaml" platform/crossplane/providers.yaml "$work/"
 rendered=$work/rendered.yaml
 
 # --include-full-xr keeps the request's own spec in the output, which the XRD's rules are checked against.
-crossplane render "$dir/example.yaml" "$dir/composition.yaml" platform/crossplane/functions.yaml \
+crossplane composition render "$dir/example.yaml" "$dir/composition.yaml" platform/crossplane/functions.yaml \
   --xrd "$dir/definition.yaml" --include-full-xr "$@" >"$rendered"
 {
   section "What $api renders"
