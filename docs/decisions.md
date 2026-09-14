@@ -1,8 +1,6 @@
 # Decisions
 
-Why the lab is built the way it is. Most of these trade realism for something that runs on one
-laptop, and where the trade changes the answer, the entry says what a platform serving a company
-would do instead.
+Why the lab is built the way it is. Most of these trade realism for something that runs on one laptop, and where the trade changes the answer, the entry says what a platform serving a company would do instead.
 
 ## Cluster and base layer
 
