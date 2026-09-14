@@ -7,6 +7,8 @@ Almost everything that breaks here breaks at a handoff between two tools, and ea
 | A change was pushed and nothing happened | [the Application](#the-application) |
 | *Synced*, but the service still runs the old version | [the Application](#the-application), then [the service](#the-service) |
 | A request stays *Progressing* and never turns ready | [the request](#the-request) |
+| A request's kind doesn't exist right after its API was applied | [the request](#the-request) |
+| A database's INSTANCES stays below what its size asks for | [the request](#the-request) |
 | The service starts but can't reach what it asked for | [the request](#the-request), then [the cloud account](#the-cloud-account) |
 | The page doesn't answer at all | [the service](#the-service) |
 | `just up` stops at `kind create cluster` | [the cluster](#the-cluster-wont-come-up) |
@@ -57,6 +59,18 @@ kubectl -n crossplane-system logs -l pkg.crossplane.io/provider=provider-aws-s3 
 
 If the request produced nothing at all, the Composition itself failed. Crossplane records that on the request (`kubectl -n hello-staging describe buckets.back.lab hello`), and `just render bucket` reproduces it on your machine, without the cluster.
 
+A request whose kind doesn't exist (`no matches for kind`) after its API was applied usually has an XRD the API server refused to turn into a CRD. `kubectl get xrd` lists that XRD without ESTABLISHED, and only an event on it says why: `kubectl describe xrd databases.back.lab`. `just render database` shows the same refusal before anything reaches the cluster ([more](platform-notes.md#an-xrd-the-api-server-refuses-shows-no-error)).
+
+A `Database` composes no managed resources. It composes a CloudNativePG cluster, and the cluster has a status of its own:
+
+```sh
+kubectl -n hello-staging get databases.back.lab hello             # INSTANCES: ready out of what the size asks for
+kubectl -n hello-staging get clusters.postgresql.cnpg.io hello-postgres
+kubectl -n cnpg-system logs deploy/cloudnative-pg --tail=30
+```
+
+An INSTANCES count that stays below its total means the cluster stopped short, even when the request and the cluster both read as ready, and the operator's log says where ([one way that happens](platform-notes.md#a-database-that-cant-grow-its-disk-still-reads-healthy)).
+
 ## The cloud account
 
 The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory: restart it and every bucket, queue and table is gone, while Crossplane still believes they exist. Crossplane notices within a minute and creates them again ([why this emulator](decisions.md#ministack-as-the-cloud-account-pinned-by-digest)).
@@ -76,7 +90,9 @@ kubectl -n hello-staging logs deploy/hello
 kubectl -n hello-staging get events --sort-by=.lastTimestamp | tail
 ```
 
-A pod stuck in `ContainerCreating` is usually waiting for a Secret it mounts: the request that composes it isn't ready yet, and the pod starts on its own once it is. `ImagePullBackOff` on a fork means the package GitHub created is private.
+A pod in `CreateContainerConfigError` is missing a Secret it reads its environment from, and `kubectl describe pod` names that Secret (`secret "hello-bucket" not found`). The request that composes the Secret either doesn't exist or hasn't composed it yet, and the pod starts on its own once the Secret is there. `ImagePullBackOff` on a fork means the package GitHub created is private.
+
+A database's Secret arrives before the database does. It exists about a second after the request, because CloudNativePG writes the credentials as soon as it creates the cluster, and Postgres took about 20 more seconds to accept connections. A service that tries its database only once, at startup, can miss that window. hello pings on every request, so its page says unreachable until the database answers.
 
 The route is separate from the pod. If the pod is Running and the address doesn't answer, check that the service asked to be public (`public: true` in its values) and that whichever front door serves that stage is there: `kubectl -n hello-staging get ingress,httproute`. Which front door a stage uses comes from the ApplicationSet, not from the service.
 
@@ -90,6 +106,8 @@ aws dynamodb delete-table --table-name hello-staging-visits
 ```
 
 `just reset` takes both steps for every request nobody committed. A request Git holds comes back on Argo CD's next sync and adopts what it had.
+
+A database's request is refused while the Usage next to it exists. Deleting a database on purpose starts with that Usage (`kubectl -n hello-staging delete usages.protection.crossplane.io hello-database`), and the database's volumes go with its request. For a request Git holds, Argo CD then puts both back on its next sync, with an empty database. `just reset` deletes the Usages nobody committed before the requests they protect.
 
 Delete requests before their namespace: a namespace deleted with managed resources still in it can get stuck, and so can they ([platform notes](platform-notes.md#deleting-a-namespace-can-strand-its-managed-resources)).
 

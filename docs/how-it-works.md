@@ -24,6 +24,7 @@ port: 8080
 size: small
 public: true
 bucket: {}
+database: {}
 ```
 
 ```yaml
@@ -32,9 +33,11 @@ image: ghcr.io/hvpaiva/back-hello:sha-4f96edd
 size: medium
 bucket:
   versioning: true
+database:
+  size: medium
 ```
 
-`bucket:` asks the platform for an S3 bucket; the service gets its name and credentials as `BUCKET_NAME` and `AWS_*` environment variables, and hello's page shows whether it reaches it. Stages are branches: `staging` deploys to staging, `main` to production. The service's CI is two calls to workflows the platform provides in this repository: `go.yaml` checks a Go service (formatting, `go vet`, tests), and `delivery.yaml` does the rest, the same for every service.
+`bucket:` asks the platform for an S3 bucket; the service gets its name and credentials as `BUCKET_NAME` and `AWS_*` environment variables. `database:` asks for a Postgres database; the service gets its address and credentials as `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` and `DATABASE_URL`, the variables any Postgres client already reads. hello's page shows whether it reaches each of them. Stages are branches: `staging` deploys to staging, `main` to production. The service's CI is two calls to workflows the platform provides in this repository: `go.yaml` checks a Go service (formatting, `go vet`, tests), and `delivery.yaml` does the rest, the same for every service.
 
 Before any of that, a pull request gets checked: the delivery workflow renders `charts/hello/` with the platform's chart for each stage, so a typo or a size the platform doesn't offer fails in the pull request, with the chart's own message.
 
@@ -61,6 +64,7 @@ Every service is deployed by the same chart, `charts/app`, fed by the service's 
 | a size: small, medium or large | replicas, CPU and memory for each size |
 | whether it's public | the address: `<name>.<stage>.localhost`, `<name>.localhost` in production |
 | a bucket, with or without versioning | its name, region and credentials, and that removing it never deletes the data |
+| a database, small, medium or large | how many instances run, the memory for each and the disk it starts with, and that removing it never deletes the data |
 | | non-root user, read-only filesystem, no Kubernetes API token |
 
 `values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed without touching a single service repository: hello is served through Traefik's Gateway in staging and through an Ingress in production, decided one stage at a time in the ApplicationSet, and hello's own values mention neither.
@@ -96,18 +100,19 @@ Services call them at `main`, so a fix reaches all of them at once.
 
 ### Crossplane and the platform's APIs
 
-`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS providers for S3, SQS and DynamoDB, and their connection to the cloud account. The S3 provider alone ships 50 resource types; Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`.
+`platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS providers for S3, SQS and DynamoDB, and their connection to the cloud account. The S3 provider alone ships 50 resource types; Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`. CloudNativePG, the operator databases are built on, comes from its own Application, `platform/apps/cloudnative-pg.yaml`.
 
 `platform/apis/` holds the APIs services request resources through, all in `back.lab/v1alpha1` and all namespaced:
 
 | Request | What the platform makes of it |
 |---|---|
 | `Bucket` | an S3 bucket named `<namespace>-<name>`, or just `<namespace>` when that already starts with the name, with versioning if asked for |
+| `Database` | a Postgres cluster that CloudNativePG runs in the namespace: one instance for small, two for medium and three for large, with a disk sized when it's created |
 | `Queue` | an SQS queue, plus a dead-letter queue where messages land after five failed deliveries |
 | `Table` | a DynamoDB table with the keys asked for, billed per request |
 | `Cache` | a Valkey server in the namespace, Redis-compatible, with a memory cap and a password of its own |
 
-Each one also composes the Secret the service reads its connection from: `<name>-bucket`, `<name>-queue`, `<name>-table`, `<name>-cache`. Only `Bucket` is wired into the chart so far, with `bucket:` in a service's values. A `Queue`, a `Table` or a `Cache` is requested by applying it to a namespace. `kubectl get buckets.back.lab -A` lists the requests, and `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became. [When something doesn't work](troubleshooting.md) follows that chain to the end.
+Each one also composes the Secret the service reads its connection from: `<name>-bucket`, `<name>-database`, `<name>-queue`, `<name>-table`, `<name>-cache`. `Bucket` and `Database` are wired into the chart, with `bucket:` and `database:` in a service's values. A `Queue`, a `Table` or a `Cache` is requested by applying it to a namespace. `kubectl get buckets.back.lab -A` lists the requests, and `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became. Always name a request with its group, as in `databases.back.lab`: CloudNativePG has a `Database` kind of its own. [When something doesn't work](troubleshooting.md) follows that chain to the end.
 
 ### Who can do what
 

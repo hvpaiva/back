@@ -86,6 +86,10 @@ That mapping from conditions to health is Argo CD's own. Asked about a managed r
 
 The S3 provider ships 50 resource types and the activation policy turns on two; the rest get a definition but no CRD. Argo CD's built-in check for Crossplane's kinds knows nothing about activation, so under the provider in Argo CD's tree, 48 definitions stayed *Progressing*, "Provisioning ...", for good. Nothing was wrong, and the Application stayed *Healthy*: it only counts its own resources. `platform/argocd/values.yaml` shows inactive definitions as *Suspended*. The new check only showed after a hard refresh of the Application (`argocd app get crossplane --hard-refresh`); until then, the definitions, which never change, kept the health the old check had given them.
 
+### A database that can't grow its disk still reads healthy
+
+kind's storage class can't expand a volume. A CloudNativePG cluster that was asked for a bigger disk got no further than that step. The operator logged `error while changing PVC storage requirement` about every 40 seconds, created no new instance and applied no new memory, and the cluster still read as healthy, so the request stayed Ready too. Asking for the old size back was refused, because CloudNativePG compares a storage change with the size it was last given, not with the volume. The only sign was the request's INSTANCES column, which counts the instances ready out of those the size asks for and read `1/2`. That's why a database's disk is set once, when the database is created ([decision](decisions.md#a-databases-size-can-change-later-its-disk-cant)).
+
 ## Services and teams
 
 ### One broken service can stop them all
@@ -128,11 +132,19 @@ A DynamoDB key is typed with a single letter: S, N or B. Written into a Composit
 
 ### A Composition has no memory
 
-A Composition runs from scratch on every reconcile, so a password generated in its template would be a different password every time, and the service would be left holding the old one. The `Cache` Composition reads the password back from the Secret it composed and generates one only when there's nothing to read. Anything the platform can't recompute has to come from somewhere that keeps it: what was already composed, or whatever generated it in the first place.
+A Composition runs from scratch on every reconcile, so a password generated in its template would be a different password every time, and the service would be left holding the old one. The `Cache` Composition reads the password back from the Secret it composed and generates one only when there's nothing to read. The `Database` Composition does the same with the disk, which it takes from the cluster it already made rather than from the size. Anything the platform can't recompute has to come from somewhere that keeps it: what was already composed, or whatever generated it in the first place.
 
 ### Drift is checked every ten minutes
 
 A provider compares each managed resource with the cloud every ten minutes by default, so a bucket deleted by hand comes back up to ten minutes later. The lab sets one minute (`--poll=1m`, in `platform/crossplane/providers.yaml`), which costs an API call per resource per minute: fine here, worth measuring with thousands of resources.
+
+### An XRD the API server refuses shows no error
+
+Crossplane turns each XRD into a CRD, and the API server checks that CRD only when Crossplane creates it. A CEL rule the server estimates as too expensive gets the CRD refused. A rule that ranked sizes with `['small', 'medium', 'large'].indexOf(self)` was refused that way ("estimated rule cost exceeds budget by factor of more than 100x"), with or without a `maxLength` on the field. The XRD then had no ESTABLISHED status, applying a request failed with "no matches for kind", and Crossplane's logs said nothing. The reason was only in a warning event on the XRD, which `kubectl describe xrd <name>` shows. A server dry run of the XRD passes, since the XRD itself is valid. `just render` converts the XRD to its CRD with `crossplane xrd convert` and puts that CRD to the API server, which is where the refusal shows. The same ranking written as a lookup in a map, `{'small': 0, 'medium': 1, 'large': 2}[self]`, costs little enough.
+
+### A Composition reading someone else's resource asks for it by name
+
+A Composition can read a resource it didn't create, like the Secret CloudNativePG writes with a database's credentials. function-go-templating finds such a resource by name and namespace, or by labels. By labels, the lookup ignores the namespace and matches across the whole cluster, so a request could end up reading another namespace's Secret. The `Database` Composition asks for the Secret by name, in the request's namespace.
 
 ## Deleting requests
 

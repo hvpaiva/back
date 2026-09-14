@@ -6,6 +6,7 @@ The lab is put together to be changed, not only read, and each of these says wha
 |---|---|---|
 | [Ask the platform for something](#ask-the-platform-for-something) | A request becomes cloud resources and a Secret, and the trace shows each step | A running lab |
 | [Delete a request, keep its data](#delete-a-request-keep-its-data) | Data outlives the request that created it | A running lab |
+| [Try to delete a service's database](#try-to-delete-a-services-database) | A Usage refuses a delete that RBAC allows | A running lab |
 | [Change what a service was given](#change-what-a-service-was-given) | A changed Secret rolls the pods that read it | A running lab |
 | [Look at it as a developer](#look-at-it-as-a-developer) | A developer reads the cluster and changes it only through Git | A running lab |
 | [Watch Git win](#watch-git-win) | Argo CD undoes a change made in the cluster | A running lab |
@@ -16,7 +17,7 @@ The lab is put together to be changed, not only read, and each of these says wha
 | [Resize a service and watch it promote](#resize-a-service-and-watch-it-promote) | The developer's loop, from a push to production | Your forks |
 | [Change the golden path for every service at once](#change-the-golden-path-for-every-service-at-once) | One chart change reaches every service | Your forks |
 
-When one of them leaves something behind, `just reset` takes out the requests nobody committed, with the buckets and tables they leave in the cloud account, and puts every Application back under Git, without rebuilding the lab. It leaves your edits alone: `git status` says which files you changed, and `git checkout` on them drops the changes.
+When one of them leaves something behind, `just reset` takes out the requests nobody committed, with the Usages applied by hand to protect them and the buckets and tables they leave in the cloud account. It puts every Application back under Git, without rebuilding the lab. It leaves your edits alone: `git status` says which files you changed, and `git checkout` on them drops the changes.
 
 ## Using the platform
 
@@ -34,7 +35,7 @@ In a few seconds the request is ready, two queues exist in the cloud account (`a
 
 The trace names both queues, `emails` and `emails-dlq`. The Secret only appears once both have a URL, so a trace run straight away shows the tree without it. The dead-letter rule lands one reconcile later, when the queue has an ARN to point at. Argo CD shows none of this, since nothing in Git asked for the request and no project here tracks resources nobody asked for. Headlamp lists it with the cluster's other custom resources.
 
-No service uses the queue. `Bucket` is the only request the chart renders today, from `bucket:` in a service's values; the others exist so the platform offers more than one kind of thing.
+No service uses the queue. The chart renders two kinds of request today, `Bucket` and `Database`, from `bucket:` and `database:` in a service's values. The others exist so the platform offers more than one kind of thing.
 
 ### Delete a request, keep its data
 
@@ -57,6 +58,20 @@ aws dynamodb scan --table-name hello-staging-visits --query Count
 ```
 
 Taking the data away is a step of its own, in the account, and `just reset` takes it for you ([why](decisions.md#a-services-data-outlives-its-request)).
+
+### Try to delete a service's database
+
+hello asks for a database in its values, and the chart puts a Usage next to that request. RBAC already stops `dev`, so try it as someone RBAC would let through:
+
+```sh
+kubectl --context platform-admin -n hello-staging delete databases.back.lab hello
+```
+
+```
+admission webhook "nousages.protection.crossplane.io" denied the request: This resource is in-use by 1 usage(s), including the *v1beta1.Usage "hello-database" (in namespace "hello-staging") with reason: "holds hello's data; delete this Usage first to delete the database on purpose".
+```
+
+The refusal comes from Crossplane. It labels whatever a Usage points at, and its webhook turns away a delete of anything that carries the label. Argo CD never deletes either object, so taking `database:` out of hello's values would leave both in place. A Usage doesn't stop a namespace deletion, though, and the database goes with its namespace ([why](decisions.md#a-services-data-outlives-its-request)).
 
 ### Change what a service was given
 
@@ -122,7 +137,7 @@ Most of what goes wrong here has that shape, one handoff at a time: [when someth
 
 These change files in your working copy and apply them without pushing. The loop, in the order you'd reach for it:
 
-- `just render <api>` takes one of the folders under `platform/apis/` (`bucket`, `queue`, `table`, `cache`) and prints what that request would create, in a second and without a cluster, checked against the schemas.
+- `just render <api>` takes one of the folders under `platform/apis/` (`bucket`, `database`, `queue`, `table`, `cache`) and prints what that request would create, in a second and without a cluster, checked against the schemas. It fails on anything it has no schema for, and with the lab running it also puts the CRD the API's definition becomes to the API server.
 - `just render-service [path]` does the same for a service through the platform's chart, for every stage, the way CI validates a pull request. Without an argument it renders `../back-hello/charts/hello`.
 - `just diff <app>` takes an Argo CD Application (`apis` delivers the APIs in `platform/apis/`; `kubectl -n argocd get applications` lists them all) and shows what applying its folder from here would change in the cluster.
 - `just local <app>` applies it instead of what Git says, and `just gitops` hands it back.

@@ -86,11 +86,13 @@ What a service requests, and what that creates, lives in the service's namespace
 
 ### A service requests infrastructure in its own values files
 
-It asks with `bucket:`, like everything else it needs, and the platform's chart renders the request. It goes through the same pull request, validation and promotion, and staging and production get separate resources. The alternative, request files in a separate repository, gives shared infrastructure a home but splits what a service needs across two places.
+It asks with `bucket:` or `database:`, like everything else it needs, and the platform's chart renders the request. It goes through the same pull request, validation and promotion, and staging and production get separate resources. The alternative, request files in a separate repository, gives shared infrastructure a home but splits what a service needs across two places.
 
 ### A service's data outlives its request
 
 Argo CD never deletes a request the chart renders, whether the request leaves the service's values or the service's Application goes, and never prunes the APIs, since deleting an XRD deletes every request made through it. Crossplane never deletes a bucket or a table: their Compositions leave Delete out of what the provider may do, so a request that goes, by hand or with its namespace, leaves its data in the cloud account, and the same request applied again adopts it instead of starting empty. A versioned bucket keeps its versions, but versioning itself goes with the request and stays suspended until the request comes back: removing it is also how a request that stops asking for versioning turns it off. Removing data is an explicit operation in the account itself, which `just reset` carries out for the requests nobody committed.
+
+A database is protected another way, because its data lives in volumes CloudNativePG owns, where no policy of the provider reaches. The chart puts a Usage next to the request, so deleting the request by hand is refused with the Usage's reason, and Argo CD never deletes either of them. A namespace deleted with the database in it still takes the data along, and only backups would cover that ([Postgres in the cluster](#postgres-in-the-cluster-run-by-cloudnativepg)).
 
 ### AWS providers built by crossplane-contrib
 
@@ -99,6 +101,12 @@ Upbound publishes the same providers, but only their latest version is free; con
 ### Postgres in the cluster, run by CloudNativePG
 
 It's the lab's example of an API built on a third-party operator rather than on a cloud provider, and the operator handles what a managed database would: replicas, failover and credentials. The emulator has an RDS of its own, which the lab doesn't use and hasn't tested. What the lab leaves out is what a company would set up first: backups to object storage, and a restore someone has actually run.
+
+The Composition pins the Postgres image, so upgrading the operator doesn't move every database to a new Postgres on its own. It uses CloudNativePG's `standard` image rather than the `system` one the operator still defaults to. The `system` images are deprecated, and the `standard` ones are built to work with backup plugins such as Barman Cloud, which replaces the operator's built-in backup.
+
+### A database's size can change later, its disk can't
+
+A size sets how many instances run and how much memory each gets, and a service can move it up or down. It also sets the disk, but only when the database is created. From then on the Composition keeps the disk the cluster already has. No volume can shrink, and kind's storage class can't grow one: a database here that asked for a bigger disk stopped short of everything else it asked for, and still read as Ready ([what that looks like](platform-notes.md#a-database-that-cant-grow-its-disk-still-reads-healthy)). On storage that grows, a company would give the disk a field of its own that only goes up.
 
 ### A bucket that exists keeps the name it was created with
 
@@ -122,7 +130,7 @@ They read like the Helm templates of the platform's chart.
 
 ### APIs no service uses yet
 
-`Queue`, `Table` and `Cache` are there so the platform offers more than one kind of request, and each is implemented differently: two through a provider, one from plain Kubernetes objects. The chart renders only `Bucket` requests until the self-service templates settle how the others are asked for. A platform team wouldn't ship an API nobody asked for; these exist to show that one contract can sit on very different things.
+`Queue`, `Table` and `Cache` are there so the platform offers more than one kind of request, and each is implemented differently: two through a provider, one from plain Kubernetes objects. The chart renders `Bucket` and `Database` requests, and the others wait until the self-service templates settle how they're asked for. A platform team wouldn't ship an API nobody asked for; these exist to show that one contract can sit on very different things.
 
 ### The cache's password is generated by its own Composition
 
@@ -192,7 +200,7 @@ Nothing else in the repo depends on the system: mise pins the same toolchain eve
 
 ### An authoring loop that doesn't go through Git
 
-Changing a Composition and pushing it to see what happens is a two-minute round trip. `just render <api>` runs the same functions Crossplane runs, here, in about a second, and checks the result against the schemas it has to satisfy. `just diff <app>` compares a folder on disk with what the cluster runs, the cheapest way to see what a push would do. `just render-service` covers the other thing a platform team changes all day, a service through the chart, for every stage at once; a chart change still reaches the cluster by push ([why](platform-notes.md#a-local-sync-sees-one-source-only)). `just local <app>` goes further and applies the folder, which means pausing Argo CD for that folder, and `just gitops` hands it back. Git stays the truth; the loop only admits that nobody writes a Composition right the first time.
+Changing a Composition and pushing it to see what happens is a two-minute round trip. `just render <api>` runs the same functions Crossplane runs, here, in about a second, and checks the result against the schemas it has to satisfy, the operators' included. A kind it has no schema for fails the check rather than passing it. With the lab running, it also puts the CRD the XRD becomes to the API server, the only place that refuses a CEL rule too costly to run ([how](platform-notes.md#an-xrd-the-api-server-refuses-shows-no-error)). `just diff <app>` compares a folder on disk with what the cluster runs, the cheapest way to see what a push would do. `just render-service` covers the other thing a platform team changes all day, a service through the chart, for every stage at once; a chart change still reaches the cluster by push ([why](platform-notes.md#a-local-sync-sees-one-source-only)). `just local <app>` goes further and applies the folder, which means pausing Argo CD for that folder, and `just gitops` hands it back. Git stays the truth; the loop only admits that nobody writes a Composition right the first time.
 
 ### Each API ships an example request next to its Composition
 

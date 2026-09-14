@@ -7,7 +7,7 @@ A local lab where Backstage, Argo CD, Crossplane and Kyverno are already wired t
 
 Everything runs on your machine, in a kind cluster, with MiniStack standing in for AWS. The only outside service involved is GitHub, where Argo CD reads what to deploy.
 
-> Work in progress: Argo CD, the delivery path for services and the first platform APIs (buckets, queues, tables and caches, through Crossplane) are in place, and Kyverno is installed with no policy of its own yet; databases, Backstage and Kargo are being added.
+> Work in progress: Argo CD, the delivery path for services and the first platform APIs (buckets, databases, queues, tables and caches, through Crossplane) are in place, and Kyverno is installed with no policy of its own yet; Backstage and Kargo are being added.
 
 ## What this is, and what it isn't
 
@@ -23,7 +23,7 @@ Two perspectives on the same cluster, each with an identity to see it through: `
 
 ### A developer shipping a service
 
-[hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, whether it's public, and a bucket. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. Pull requests are checked against the platform's rules before the merge. The developer never touches the cluster, never writes a Kubernetes manifest or a Dockerfile, and never creates the bucket: the platform does, and hands the service its details. As `dev`, Argo CD shows only the services, and kubectl reads the team's namespaces without being able to change them.
+[hello](https://github.com/hvpaiva/back-hello) is a small service that displays its own version. Its repository holds the code and a short description of what it needs from the platform: name, team, port, size, whether it's public, a bucket and a database. A push to its `staging` branch builds an image and deploys it to staging. A pull request from `staging` to `main` promotes that same image to production. Pull requests are checked against the platform's rules before the merge. The developer never touches the cluster, never writes a Kubernetes manifest or a Dockerfile, and never creates the bucket or the database: the platform does, and hands the service their details. As `dev`, Argo CD shows only the services, and kubectl reads the team's namespaces without being able to change them.
 
 <p align="center">
   <img src="docs/images/hello-staging.png" alt="hello in staging: an orange hang tag showing version sha-8fdd383" width="45%">
@@ -32,7 +32,7 @@ Two perspectives on the same cluster, each with an identity to see it through: `
 
 ### The platform behind it
 
-Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs: a service's request for a bucket becomes an S3 bucket in the lab's cloud account, with the platform's defaults. As `platform-admin`, you see all of it.
+Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs, with the platform's defaults. A service's request for a bucket becomes an S3 bucket in the lab's cloud account, and a request for a database becomes a Postgres cluster that CloudNativePG runs in the service's namespace. As `platform-admin`, you see all of it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
