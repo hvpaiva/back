@@ -25,29 +25,39 @@ rendered=()
 for stage in staging production; do
   values=(--values "$chart/values.yaml")
   [[ -f $chart/values-$stage.yaml ]] && values+=(--values "$chart/values-$stage.yaml")
-  if errors=$(helm template "$service" charts/app "${values[@]}" --set "platform.stage=$stage" 2>&1 >"$work/$stage.yaml"); then
-    printf '# stage: %s\n' "$stage"
-    cat "$work/$stage.yaml"
-    rendered+=("$stage")
-  else
-    { fail "$stage"; hint "$errors"; } >&2
-  fi
+  for route in ingress gateway; do
+    if errors=$(helm template "$service" charts/app "${values[@]}" \
+      --set "platform.stage=$stage" --set "platform.route=$route" 2>&1 >"$work/$stage-$route.yaml"); then
+      printf '# stage: %s  route: %s\n' "$stage" "$route"
+      cat "$work/$stage-$route.yaml"
+      rendered+=("$stage $route")
+    else
+      { fail "$stage on $route"; hint "$errors"; } >&2
+    fi
+  done
 done
 
 exec >&2
 section "$service through charts/app"
-for stage in "${rendered[@]}"; do
-  ok "$(printf '%-11s %s objects' "$stage" "$(awk '/^kind: /{n++} END{print n+0}' "$work/$stage.yaml")")"
+if git -C "$chart" rev-parse --git-dir >/dev/null 2>&1; then
+  dirty=''
+  if [[ -n $(git -C "$chart" status --porcelain .) ]]; then dirty=', uncommitted'; fi
+  ok "$(printf '%-11s %s' values "$(git -C "$chart" rev-parse --abbrev-ref HEAD) at $(git -C "$chart" rev-parse --short HEAD)$dirty")"
+fi
+for entry in "${rendered[@]}"; do
+  read -r stage route <<<"$entry"
+  ok "$(printf '%-11s %-8s %s objects' "$stage" "$route" "$(awk '/^kind: /{n++} END{print n+0}' "$work/$stage-$route.yaml")")"
 done
 
 # What Helm can't check: the CRDs, the API server's own validation, whatever admission adds. The
 # namespace is Argo CD's to pick, so the dry run uses the current one.
 if kubectl cluster-info >/dev/null 2>&1; then
-  for stage in "${rendered[@]}"; do
-    if errors=$(kubectl apply --dry-run=server --filename "$work/$stage.yaml" 2>&1 >/dev/null); then
-      ok "$(printf '%-11s the API server accepts it' "$stage")"
+  for entry in "${rendered[@]}"; do
+    read -r stage route <<<"$entry"
+    if errors=$(kubectl apply --dry-run=server --filename "$work/$stage-$route.yaml" 2>&1 >/dev/null); then
+      ok "$(printf '%-11s %-8s the API server accepts it' "$stage" "$route")"
     else
-      fail "$stage"
+      fail "$stage on $route"
       hint "$errors"
     fi
   done
