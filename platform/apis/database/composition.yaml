@@ -1,0 +1,82 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: database-cnpg
+spec:
+  compositeTypeRef:
+    apiVersion: back.lab/v1alpha1
+    kind: Database
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $observed := .observed.resources | default dict }}
+            {{- $cluster := printf "%s-postgres" $xr.metadata.name }}
+            {{- $sizes := dict
+                  "small"  (dict "instances" 1 "disk" "1Gi"  "memory" "256Mi")
+                  "medium" (dict "instances" 2 "disk" "5Gi"  "memory" "512Mi")
+                  "large"  (dict "instances" 3 "disk" "10Gi" "memory" "1Gi") }}
+            {{- $size := get $sizes $xr.spec.size }}
+            {{- /* A disk keeps its first size: volumes can't shrink, and not all of them can grow. */}}
+            {{- $disk := dig "postgres" "resource" "spec" "storage" "size" $size.disk $observed }}
+            ---
+            # By name: a label selector here would search every namespace, not just the request's.
+            apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
+            kind: ExtraResources
+            requirements:
+              credentials:
+                apiVersion: v1
+                kind: Secret
+                matchName: {{ $cluster }}-app
+                namespace: {{ $xr.metadata.namespace }}
+            ---
+            apiVersion: postgresql.cnpg.io/v1
+            kind: Cluster
+            metadata:
+              name: {{ $cluster }}
+              annotations:
+                {{ setResourceNameAnnotation "postgres" }}
+            spec:
+              instances: {{ $size.instances }}
+              imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+              storage:
+                size: {{ $disk }}
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: {{ $size.memory }}
+                limits:
+                  memory: {{ $size.memory }}
+            {{- with first (getExtraResources . "credentials") }}
+            ---
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: {{ $xr.metadata.name }}-database
+              annotations:
+                {{ setResourceNameAnnotation "connection" }}
+            data:
+              PGHOST: {{ index .resource.data "host" }}
+              PGPORT: {{ index .resource.data "port" }}
+              PGDATABASE: {{ index .resource.data "dbname" }}
+              PGUSER: {{ index .resource.data "username" }}
+              PGPASSWORD: {{ index .resource.data "password" }}
+              DATABASE_URL: {{ index .resource.data "uri" }}
+            {{- end }}
+            ---
+            apiVersion: back.lab/v1alpha1
+            kind: Database
+            status:
+              instances: {{ printf "%v/%v" (dig "postgres" "resource" "status" "readyInstances" 0 $observed) $size.instances | quote }}
+              disk: {{ $disk }}
+    - step: ready
+      functionRef:
+        name: function-auto-ready

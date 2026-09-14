@@ -1,0 +1,44 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: databases.back.lab
+spec:
+  group: back.lab
+  names:
+    kind: Database
+    plural: databases
+  scope: Namespaced
+  defaultCompositionRef:
+    name: database-cnpg
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      additionalPrinterColumns:
+        - name: INSTANCES
+          type: string
+          jsonPath: .status.instances
+        - name: DISK
+          type: string
+          jsonPath: .status.disk
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                size:
+                  type: string
+                  enum: [small, medium, large]
+                  default: small
+                  description: How many instances run and how much memory each gets; the disk is sized from it once, at creation.
+            status:
+              type: object
+              properties:
+                instances:
+                  type: string
+                  description: Instances ready, out of the ones the size asks for.
+                disk:
+                  type: string
+                  description: The disk each instance has, sized when the database was created.

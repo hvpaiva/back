@@ -1,0 +1,8 @@
+# A request, to render the Composition against (`just render database`) or to apply as it is.
+apiVersion: back.lab/v1alpha1
+kind: Database
+metadata:
+  name: orders
+  namespace: hello-staging
+spec:
+  size: small
