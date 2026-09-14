@@ -13,7 +13,7 @@ Everything runs on your machine, in a kind cluster, with MiniStack standing in f
 
 It's a lab. The four tools are already wired together, so you can use the platform they make and change it: ask it for a queue and watch what it becomes, or swap what a request is fulfilled with and watch nothing downstream notice.
 
-What carries over to a real platform is the shape of it: the contracts between the tools, the APIs, the chart, and who owns what. What doesn't is the infrastructure underneath, which is a stage set: one node, no TLS, local accounts instead of single sign-on, and an AWS emulator that no longer gets updates. [Decisions](docs/decisions.md) says what a company would do instead, where the difference matters.
+What carries over to a real platform is the shape of it: the contracts between the tools, the APIs, the chart, and who owns what. What doesn't is the infrastructure underneath, which is a stage set: one node, no TLS, local accounts instead of single sign-on, and an AWS emulator instead of a cloud account. [Decisions](docs/decisions.md) says what a company would do instead, where the difference matters.
 
 It isn't a course either. It doesn't teach each tool from scratch; their own documentation does that better. It assumes you know your way around Kubernetes and Helm, and the idea behind GitOps.
 
