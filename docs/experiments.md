@@ -81,9 +81,10 @@ Reloader watches the namespaces the platform names for it, in `platform/apps/rel
 kubectl --context dev -n hello-staging get pods,buckets.back.lab
 kubectl --context dev -n hello-staging delete pod --all
 kubectl --context dev -n hello-staging get secret hello-bucket
+kubectl --context dev get compositions
 ```
 
-The first works, the other two are forbidden. A developer reads their team's namespaces, and the way to change anything is a pull request. In Argo CD, the same account sees the services and not the platform.
+The first works, the other three are forbidden. A developer reads their team's namespaces, and the way to change anything is a pull request. In Argo CD, the same account sees the services and not the platform.
 
 ### Watch Git win
 

@@ -50,6 +50,21 @@ At no point does the developer (or CI) talk to the cluster. Git is the only inte
 
 The platform team owns this repository. Everything below can be changed from a working copy and seen before it's pushed: [things to try](experiments.md) walks that loop.
 
+### The golden path
+
+Every service is deployed by the same chart, `charts/app`, fed by the service's own values. Who decides what:
+
+| The team declares | The platform decides |
+|---|---|
+| name and owning team | object names, labels, the namespace (`<name>-<stage>`) and the team's read access to it |
+| the port it listens on | liveness and readiness probes on `/healthz` |
+| a size: small, medium or large | replicas, CPU and memory for each size |
+| whether it's public | the address: `<name>.<stage>.localhost`, `<name>.localhost` in production |
+| a bucket, with or without versioning | its name, region and credentials, and that removing it never deletes the data |
+| | non-root user, read-only filesystem, no Kubernetes API token |
+
+`values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed without touching a single service repository: hello is served through Traefik's Gateway in staging and through an Ingress in production, decided one stage at a time in the ApplicationSet, and hello's own values mention neither.
+
 ### The base layer
 
 `cluster/` is what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account, installed once by `just up`. Above it, only the bootstrap is applied by hand: Argo CD's first install, its projects and the root Application.
@@ -105,19 +120,4 @@ Two identities stand for the two sides: `dev`, a developer in `team-a`, the team
 
 The `developer` role, in `platform/rbac/`, combines Kubernetes' `view` role with Crossplane's read access to requests and managed resources. `charts/app` grants it to the service's team in every namespace it deploys to, so a new service's team can read it from the start. `crossplane resource trace` works for a developer too, down to the Secret it can't read. Argo CD's built-in `admin` account is off; the kind cluster's own admin (`kubectl --context kind-back`) is what `just` builds the cluster with.
 
-Try `kubectl --context dev -n hello-staging get pods,buckets.back.lab`, then `kubectl --context dev get compositions`.
-
-### The golden path
-
-Every service is deployed by the same chart, `charts/app`, fed by the service's own values. Who decides what:
-
-| The team declares | The platform decides |
-|---|---|
-| name and owning team | object names, labels, the namespace (`<name>-<stage>`) and the team's read access to it |
-| the port it listens on | liveness and readiness probes on `/healthz` |
-| a size: small, medium or large | replicas, CPU and memory for each size |
-| whether it's public | the address: `<name>.<stage>.localhost`, `<name>.localhost` in production |
-| a bucket, with or without versioning | its name, region and credentials, and that removing it never deletes the data |
-| | non-root user, read-only filesystem, no Kubernetes API token |
-
-`values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed without touching a single service repository: hello is served through Traefik's Gateway in staging and through an Ingress in production, decided one stage at a time in the ApplicationSet, and hello's own values mention neither.
+[Look at it as a developer](experiments.md#look-at-it-as-a-developer) tries it.
