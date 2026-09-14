@@ -26,6 +26,7 @@ bucket: null
 
 # A Postgres database: `{}`, or `size: medium` or `large` for more instances and memory.
 # Its address and credentials reach the service as PG* variables and DATABASE_URL.
+# `restore: {}` creates it from its own backups instead of empty, and `at:` a time goes back to then.
 database: null
 
 # Set by the platform's ApplicationSet, never by services.

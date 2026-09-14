@@ -10,6 +10,9 @@ metadata:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   size: {{ .Values.database.size | default "small" }}
+  {{- if kindIs "map" .Values.database.restore }}
+  restore: {{- toYaml .Values.database.restore | nindent 4 }}
+  {{- end }}
 ---
 # While this exists, deleting the database by hand is refused; it stays when `database:` goes.
 apiVersion: protection.crossplane.io/v1beta1

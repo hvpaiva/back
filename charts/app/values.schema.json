@@ -48,7 +48,14 @@
       "type": ["object", "null"],
       "additionalProperties": false,
       "properties": {
-        "size": { "enum": ["small", "medium", "large"] }
+        "size": { "enum": ["small", "medium", "large"] },
+        "restore": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "at": { "type": "string", "format": "date-time" }
+          }
+        }
       }
     },
     "platform": {
