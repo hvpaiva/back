@@ -32,9 +32,9 @@ kubectl -n hello-staging get secret emails-queue -o jsonpath='{.data.QUEUE_URL}'
 
 In a few seconds the request is ready, two queues exist in the cloud account (`aws sqs list-queues`: the queue and the dead-letter queue messages land in after five failed deliveries) and the Secret holds what a service would read. `kubectl -n hello-staging delete queues.back.lab emails` takes all of it back.
 
-The trace names both queues, `emails` and `emails-dlq`, and the Secret only appears once both have a URL: the first trace shows the tree without it, and the dead-letter rule lands one reconcile later, when the queue has an ARN to point at. Argo CD shows none of this, since nothing in Git asked for the request and no project here tracks resources nobody asked for. Headlamp lists it with the cluster's other custom resources.
+The trace names both queues, `emails` and `emails-dlq`. The Secret only appears once both have a URL, so a trace run straight away shows the tree without it. The dead-letter rule lands one reconcile later, when the queue has an ARN to point at. Argo CD shows none of this, since nothing in Git asked for the request and no project here tracks resources nobody asked for. Headlamp lists it with the cluster's other custom resources.
 
-No service uses that one. `Bucket` is the only request the chart renders today, from `bucket:` in a service's values; the others exist so the platform offers more than one kind of thing.
+No service uses the queue. `Bucket` is the only request the chart renders today, from `bucket:` in a service's values; the others exist so the platform offers more than one kind of thing.
 
 ### Delete a request, keep its data
 
@@ -149,9 +149,9 @@ kubectl -n hello-staging wait --for=condition=ready caches.back.lab/sessions
 kubectl -n hello-staging logs deploy/sessions-cache | grep -m1 version=
 ```
 
-`cache` there is the folder under `platform/apis/`, and `apis` is the Argo CD Application that delivers all of them (`kubectl -n argocd get applications` lists the rest). Waiting on the request is the platform's own contract: it's ready when what it composed is, which the first time round includes pulling an image nobody here had asked for before.
+`cache` there is the folder under `platform/apis/`, and `apis` is the Argo CD Application that delivers all of them (`kubectl -n argocd get applications` lists the rest). The wait is on the request because that's the platform's contract: a request is ready when everything it composed is. The first time, that includes pulling an image nobody here had asked for before.
 
-That line names Redis. `just local` pauses Argo CD's enforcement for that folder and for the root Application that would restore it, so while it's on, the cluster and Git disagree on purpose. Handing it back is the half worth watching, because the request never stops being the same request:
+The log line names Redis. `just local` pauses Argo CD's enforcement for `platform/apis/` and for the root Application that would restore it, so while it's on, the cluster and Git disagree on purpose. Handing the folder back is the half worth watching, because the request never stops being the same request:
 
 ```sh
 just gitops                                        # hand it back to Git
@@ -159,7 +159,7 @@ kubectl -n hello-staging get pods -w               # the pod is replaced, then C
 kubectl -n hello-staging logs deploy/sessions-cache | grep -m1 version=
 ```
 
-Now it names Valkey. `just gitops` hands the folder back on the spot, and the rest follows from there: Argo CD compares against Git again, Crossplane writes the Deployment back, and the pod is replaced. Across both log lines the Secret keeps its keys, the Service keeps its address, and anything reading them notices nothing: that's what an API buys over a template. Then clean up after yourself:
+Now the log line names Valkey. `just gitops` hands the folder back on the spot, and the rest follows from there: Argo CD compares against Git again, Crossplane writes the Deployment back, and the pod is replaced. Across both log lines the Secret keeps its keys, the Service keeps its address, and anything reading them notices nothing: that's what an API buys over a template. Then clean up after yourself:
 
 ```sh
 kubectl -n hello-staging delete caches.back.lab sessions
