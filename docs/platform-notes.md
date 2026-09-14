@@ -187,6 +187,16 @@ The S3 provider ships 50 resource types and the activation policy turns on two; 
 
 Delete a namespace that still holds a managed resource and the resource stays behind, stuck on its finalizer, and so does the namespace. To reach the cloud, the provider first records that the resource uses its ProviderConfig, in an object it creates in the same namespace; a terminating namespace refuses new objects, so the provider never gets as far as deleting anything. Restarting it doesn't help. It's an open Crossplane bug ([crossplane-runtime#1150](https://github.com/crossplane/crossplane-runtime/issues/1150)). Delete the requests first, then the namespace. If one is already stuck, delete the external resource by hand if it still exists, then remove the finalizer.
 
+## A request goes before what it composed does
+
+Delete a request and it leaves the API almost at once: gone by the first reading, 68 ms after the
+delete, finalizer and all. What it composed takes longer. The managed resource behind a bucket
+stayed 6 s in one run and 30 s in another, both well inside the provider's one-minute poll, while
+the bucket itself had already left the account by that first reading. So waiting for the request to
+disappear hands back a lab that is still tearing down, and re-applying the same request then races a
+resource that is still terminating. `just reset` waits on the `crossplane.io/composite` label
+instead, which is what the composed resources carry.
+
 ## Waves in an app of apps don't wait by default
 
 Sync waves order the resources of one Application, and Argo CD waits for each wave to be healthy before the next. But Argo CD 1.8 stopped assessing the health of Applications themselves, so a root Application applies all its children at once. The services would then be created before the APIs their requests use. `platform/argocd/values.yaml` restores that health check, and root waits: Crossplane, then the APIs, then the services. The cost is that a child that never becomes healthy holds back every later wave. And a child can look healthy for a moment between its own waves: on a fresh install, root moved on as soon as Crossplane itself was up, before its providers were installed. Harmless here, since the APIs only need Crossplane and the services' requests wait for the providers, but a child's health doesn't mean it has finished syncing.

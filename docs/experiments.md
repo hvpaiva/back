@@ -5,6 +5,9 @@ They come in three kinds: the first group needs nothing but a running lab, the s
 that keeps a change off Git until you want it there, and the last two need your own copies of the
 repositories. Everything runs from this directory, where `mise.toml` points the tools at the lab.
 
+When one of them leaves something behind, `just reset` takes out the requests nobody committed and
+puts every Application back under Git, without rebuilding the lab. It leaves your edits alone.
+
 ## Using the platform
 
 ### Ask the platform for something

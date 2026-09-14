@@ -90,6 +90,10 @@ local app:
 gitops:
     @scripts/local.sh gitops
 
+# Undo the experiments: remove the requests nobody committed and put the lab back under Git
+reset:
+    @scripts/reset.sh
+
 # Smoke-test the lab from the host
 check:
     @scripts/check.sh
