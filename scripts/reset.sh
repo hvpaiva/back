@@ -18,7 +18,6 @@ applied_by_hand() { # kinds
     | [.metadata.namespace, (.kind | ascii_downcase), .metadata.name] | @tsv'
 }
 
-# A request leaves the API in under a tenth of a second; what it composed takes up to half a minute.
 still_composed() { # request names
   local name
   for name in "$@"; do

@@ -57,8 +57,6 @@ jobs:
             if [[ -f $CHART_DIR/values-$stage.yaml ]]; then
               args+=(--values "$CHART_DIR/values-$stage.yaml")
             fi
-            # The platform picks which front door serves a stage, and can move a service between
-            # them without the service changing, so a pull request has to render both.
             for route in ingress gateway; do
               if errors=$(helm template "$SERVICE" .platform/charts/app "${args[@]}" \
                 --set "platform.stage=$stage" --set "platform.route=$route" 2>&1 >/dev/null); then
