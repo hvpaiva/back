@@ -176,10 +176,14 @@ kubectl -n hello-production get ingress,httproute
 curl -s -o /dev/null -w '%{http_code}\n' http://hello.localhost
 ```
 
-The Ingress goes, a route takes its place, and the address stays the same. Nothing in back-hello
-changed, which is the whole point: the front door is the platform's business, and a service that had
-to be edited for this would be a service the platform can't migrate on its own. `just gitops` puts
-it back.
+The Ingress goes and a route takes its place, at the same address and with one catch worth seeing:
+for about two tenths of a second, neither serves. Argo CD deletes one and creates the other in the
+same sync, and Traefik needs a moment to pick the route up. Hammer it and you'll watch that happen,
+28 failed requests out of 1225 here; ask once and you'll never know it was there.
+
+Nothing in back-hello changed, which is the whole point: the front door is the platform's business,
+and a service that had to be edited for this would be a service the platform can't migrate on its
+own. `just gitops` puts it back.
 
 ### Add a field to an API
 

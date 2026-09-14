@@ -104,6 +104,19 @@ syncs cleanly about eight seconds after the namespace appears, with or without a
 because the sync operation never ends in failure: it keeps re-attempting. `just up` names it while
 that lasts, instead of looking slow.
 
+## Moving a service between front doors costs a gap
+
+Traefik serves Ingress and Gateway API at the same time, so a service moves from one to the other by
+changing a parameter, and nothing about the service changes. The move is not seamless, though. Argo
+CD deletes the Ingress and creates the HTTPRoute in the same sync, and Traefik takes a moment to
+serve the new one, so the address stops answering for about two tenths of a second: measured twice,
+28 failed requests out of 1225 on one stage and 18 out of 645 on the other. One request per route
+would have found nothing, which is how a migration like this gets called seamless.
+
+The gap belongs to the swap, not to the route. A route created on its own starts serving within 66
+to 179 ms of `kubectl apply`, and only the first Gateway route a cluster ever gets costs an extra
+miss, while Traefik's provider wakes up.
+
 ## Letting teams create their namespaces
 
 Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.
