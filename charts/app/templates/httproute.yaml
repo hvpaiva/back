@@ -13,7 +13,12 @@ spec:
   hostnames:
     - {{ include "app.host" . }}
   rules:
+    # Argo Rollouts sets these during a canary.
     - backendRefs:
         - name: {{ .Values.application.name }}
           port: 80
+          weight: 100
+        - name: {{ .Values.application.name }}-canary
+          port: 80
+          weight: 0
 {{- end }}

@@ -5,6 +5,7 @@
 declare -A schema_sources=(
   [postgresql.cnpg.io]=platform/apps/cloudnative-pg.yaml
   [barmancloud.cnpg.io]=platform/apps/plugin-barman-cloud.yaml
+  [argoproj.io]=platform/apps/argo-rollouts.yaml
   [gateway.networking.k8s.io]=scripts/base.sh
 )
 

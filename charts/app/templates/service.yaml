@@ -11,3 +11,19 @@ spec:
     - name: http
       port: 80
       targetPort: http
+{{- if and .Values.public (eq .Values.platform.route "gateway") }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.application.name }}-canary
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "app.selector" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+{{- end }}

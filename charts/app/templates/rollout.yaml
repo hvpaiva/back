@@ -1,6 +1,6 @@
 {{- $size := include "app.size" . | fromJson }}
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: {{ .Values.application.name }}
   labels:
@@ -12,6 +12,21 @@ spec:
   selector:
     matchLabels:
       {{- include "app.selector" . | nindent 6 }}
+  strategy:
+    canary:
+      {{- if and .Values.public (eq .Values.platform.route "gateway") }}
+      stableService: {{ .Values.application.name }}
+      canaryService: {{ .Values.application.name }}-canary
+      trafficRouting:
+        plugins:
+          argoproj-labs/gatewayAPI:
+            httpRoute: {{ .Values.application.name }}
+      {{- end }}
+      steps:
+        - setWeight: 20
+        - pause: {duration: 30s}
+        - setWeight: 50
+        - pause: {duration: 30s}
   template:
     metadata:
       labels:
