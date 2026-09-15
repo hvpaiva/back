@@ -13,6 +13,7 @@ Almost everything that breaks here breaks at a handoff between two tools, and ea
 | The service starts but can't reach what it asked for | [the request](#the-request), then [the cloud account](#the-cloud-account) |
 | The page doesn't answer at all | [the service](#the-service) |
 | `just up` stops at `kind create cluster` | [the cluster](#the-cluster-wont-come-up) |
+| A check fails on GitHub | [CI](#ci) |
 
 Run everything from this directory: `mise.toml` points kubectl, the argocd CLI and the AWS CLI at the lab.
 
@@ -108,6 +109,10 @@ A pod in `CreateContainerConfigError` is missing a Secret it reads its environme
 A database's Secret arrives before the database does. It exists about a second after the request, because CloudNativePG writes the credentials as soon as it creates the cluster, and Postgres took about 20 more seconds to accept connections. A service that tries its database only once, at startup, can miss that window. hello pings on every request, so its page says unreachable until the database answers.
 
 The route is separate from the pod. If the pod is Running and the address doesn't answer, check that the service asked to be public (`public: true` in its values) and that whichever front door serves that stage is there: `kubectl -n hello-staging get ingress,httproute`. Which front door a stage uses comes from the ApplicationSet, not from the service.
+
+## CI
+
+Each of `ci.yaml`'s checks but one runs an area of `just test`, and is named after it, so `just test apis` reproduces the `apis` check here, line for line. With the lab running, the same command also asks the API server, which CI's checks can't. The `lab` check builds the lab from nothing with the recipes a first run uses; when a step fails, the last one prints the Applications, what Crossplane holds, the pods that aren't running and the end of `.logs/lab.log`.
 
 ## Starting over
 

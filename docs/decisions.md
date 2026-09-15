@@ -215,3 +215,19 @@ Changing a Composition and pushing it to see what happens is a two-minute round 
 ### Each API ships an example request next to its Composition
 
 It's what `just render` renders, and what to copy when asking for one by hand. The Application that delivers the APIs excludes those files, or it would create them in the cluster ([how](platform-notes.md#an-application-applies-every-file-in-its-folder)).
+
+### The platform's CI runs `just test`
+
+Every check CI makes is a recipe first, so a failure on GitHub reads the same on a laptop, and the same command reproduces it. The jobs have no cluster, and `just test` needs none: the renders, their schemas and the health checks all work offline. What only an API server answers, like a ConfigMap key it refuses or a CEL rule too costly to run, gets asked whenever a cluster is there.
+
+### One validator for everything the lab renders
+
+`crossplane resource validate` checks core Kubernetes kinds as well as every CRD it's given, CEL rules included, with the API server's own validation library. The lab already ran it on its APIs, so it checks the chart's output and everything Argo CD applies too, instead of adding kubeconform, which needs every CRD converted to JSON Schema first and doesn't run CEL. Neither can see what only the API server refuses.
+
+### Scenarios live in `tests/`, not next to the APIs
+
+A Composition decides most of what it composes from what already exists, so a render against the example request alone leaves most of it out: the database's example renders two of its six resources ([why](platform-notes.md#a-render-sees-only-what-a-composition-makes-from-nothing)). A scenario hands the render what a cluster would already hold. They can't sit next to the Compositions, because the Application that delivers the APIs applies every file in their folders.
+
+### The lab is built from nothing after every push to main, and every night
+
+It's the only check where Crossplane, the operators and the cloud account actually do what the platform asks, and it keeps the README honest on a fresh Ubuntu 24.04 machine: a chart that moved or an image that vanished upstream shows up there before someone cloning the lab finds it. Argo CD reads the platform from `main`, in CI as anywhere, so this job says whether `main` works, not whether a pull request would.

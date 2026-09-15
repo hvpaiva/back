@@ -179,10 +179,11 @@ Most of what goes wrong here has that shape, one handoff at a time: [when someth
 
 These change files in your working copy and apply them without pushing. The loop, in the order you'd reach for it:
 
-- `just render <api>` takes one of the folders under `platform/apis/` (`bucket`, `database`, `queue`, `table`, `cache`) and prints what that request would create, in a second and without a cluster, checked against the schemas. It fails on anything it has no schema for, and with the lab running it also puts the CRD the API's definition becomes to the API server.
+- `just render <api>` takes one of the folders under `platform/apis/` (`bucket`, `database`, `queue`, `table`, `cache`) and prints what that request would create, in a second and without a cluster, checked against the schemas. It fails on anything it has no schema for, and with the lab running it also puts the CRD the API's definition becomes to the API server. `just render database backed-up` renders it in one of the scenarios under `tests/apis/database/`, with the resources a running database already has.
 - `just render-service [path]` does the same for a service through the platform's chart, for every stage, the way CI validates a pull request. Without an argument it renders `../back-hello/charts/hello`.
 - `just diff <app>` takes an Argo CD Application (`apis` delivers the APIs in `platform/apis/`; `kubectl -n argocd get applications` lists them all) and shows what applying its folder from here would change in the cluster.
 - `just local <app>` applies it instead of what Git says, and `just gitops` hands it back.
+- `just test` runs the checks CI runs on every pull request, in about a minute, and `just test apis` only one area of them.
 
 A change to `charts/app` still reaches the cluster by push ([why](platform-notes.md#a-local-sync-sees-one-source-only)), which is what [your own forks](#with-your-own-forks) are for.
 

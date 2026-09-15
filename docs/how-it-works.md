@@ -98,6 +98,18 @@ An ApplicationSet reads `charts/*/values.yaml` from each service's repository, o
 
 Services call them at `main`, so a fix reaches all of them at once.
 
+### How the platform checks itself
+
+`ci.yaml` checks this repository on every push to `main` and every pull request, with the command a platform engineer runs before pushing, `just test`, one job per area:
+
+- `scripts`: the scripts behind the recipes and the workflows, through shellcheck and actionlint.
+- `health`: the health checks Argo CD runs for the platform's kinds, asked about an object in each state they report.
+- `apis`: every API rendered against its example request and against the scenarios in `tests/apis/`, which hand the Composition what a cluster would already hold.
+- `services`: the chart rendered for the services in `tests/services/` and for the ones the ApplicationSet deploys, from the branches it reads them from, so a chart change that breaks a real service fails before it reaches that service.
+- `platform`: every Application rendered the way Argo CD renders it, each chart with the values the lab gives it, and the base layer under them.
+
+Everything rendered is checked against the schemas of the versions the lab pins. These jobs have no cluster, so what only an API server refuses is asked where there is one: by `just test` while the lab runs, and by a second job that builds the lab from nothing on a fresh machine after every push to `main` and every night, runs `just test` against it, asks the platform for one of everything it offers and resets it.
+
 ### Crossplane and the platform's APIs
 
 `platform/apps/crossplane.yaml` installs Crossplane and, from `platform/crossplane/`, what the APIs build on: two functions for Compositions (go-templating and auto-ready), the AWS providers for S3, SQS and DynamoDB, and their connection to the cloud account. The S3 provider alone ships 50 resource types; Crossplane only serves the ones the platform uses, listed in an activation policy in `providers.yaml`. CloudNativePG, the operator databases are built on, comes from its own Application, `platform/apps/cloudnative-pg.yaml`, and its Barman Cloud plugin, which backs databases up, from `platform/apps/plugin-barman-cloud.yaml`.
