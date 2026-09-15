@@ -1,0 +1,64 @@
+# Runs a service's canary: its steps, the traffic split on its route, and the analysis that decides.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-rollouts
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  source:
+    repoURL: https://argoproj.github.io/argo-helm
+    chart: argo-rollouts
+    targetRevision: 2.43.1
+    helm:
+      valuesObject:
+        controller:
+          # The chart's default adds a standby for the leader, which one node has no use for.
+          replicas: 1
+          # From the plugin's own image rather than a download, so the controller starts without reaching GitHub, on either architecture.
+          initContainers:
+            - name: gatewayapi-plugin
+              image: ghcr.io/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi:v0.17.0@sha256:bc40d5edf13307e455f6c18cbf9cc79715165cbee8b05a674fd88119f119d4a2
+              command: [cp, /bin/rollouts-plugin-trafficrouter-gatewayapi, /plugins/]
+              volumeMounts:
+                - name: gatewayapi-plugin
+                  mountPath: /plugins
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+                readOnlyRootFilesystem: true
+                seccompProfile:
+                  type: RuntimeDefault
+          volumes:
+            - name: gatewayapi-plugin
+              emptyDir: {}
+          volumeMounts:
+            - name: gatewayapi-plugin
+              mountPath: /plugins
+          trafficRouterPlugins:
+            - name: argoproj-labs/gatewayAPI
+              location: file:///plugins/rollouts-plugin-trafficrouter-gatewayapi
+        providerRBAC:
+          # Traffic moves only on Gateway API routes, so no other router's permissions.
+          providers:
+            istio: false
+            smi: false
+            ambassador: false
+            awsLoadBalancerController: false
+            awsAppMesh: false
+            traefik: false
+            apisix: false
+            contour: false
+            glooPlatform: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-rollouts
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
