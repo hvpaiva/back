@@ -41,13 +41,28 @@ if [[ ${1:-} != "" && $1 != -* ]]; then
   shift
 fi
 
+version=$(crossplane_version)
+if [[ -z $version ]]; then
+  echo "platform/apps/crossplane.yaml doesn't say which Crossplane the cluster runs" >&2
+  exit 1
+fi
+engine=xpkg.crossplane.io/crossplane/crossplane:v$version
+mapfile -t images < <(yq ea '[select(.kind == "Function") | .spec.package] | .[]' platform/crossplane/functions.yaml)
+# Render pulls what's missing within its one-minute timeout, which a slow registry runs out of.
+for image in "$engine" "${images[@]}"; do
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    waiting "pulling $image, only this once" >&2
+    docker pull --quiet "$image" >/dev/null
+  fi
+done
+
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 rendered=$work/rendered.yaml
 
 # --include-full-xr keeps the request's own spec in the output, which the XRD's rules are checked against.
 crossplane composition render "$request" "$dir/composition.yaml" platform/crossplane/functions.yaml \
-  --xrd "$dir/definition.yaml" --include-full-xr "${given[@]}" "$@" >"$rendered"
+  --xrd "$dir/definition.yaml" --include-full-xr --crossplane-image "$engine" "${given[@]}" "$@" >"$rendered"
 {
   section "What $title renders"
   # Two kinds can share a name here: the request's own, and the provider's it composes.

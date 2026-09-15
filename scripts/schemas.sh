@@ -12,6 +12,10 @@ kube_version() {
   yq '.nodes[0].image | split("@") | .[0] | split(":") | .[1]' cluster/kind.yaml
 }
 
+crossplane_version() {
+  yq '(.spec.sources // [.spec.source])[] | select(.chart == "crossplane") | .targetRevision' platform/apps/crossplane.yaml
+}
+
 chart_archive() { # repository chart version
   local archive=.cache/charts/$2-$3.tgz download
   if [[ ! -s $archive ]]; then
@@ -85,8 +89,7 @@ schemas_for() { # resources directory
 validate() { # schemas resources
   local version
   # The built-in schemas come from the Crossplane the cluster runs, read from its chart, not from `stable`.
-  version=$(yq '(.spec.sources // [.spec.source])[] | select(.chart == "crossplane") | .targetRevision' \
-    platform/apps/crossplane.yaml)
+  version=$(crossplane_version)
   if [[ -z $version ]]; then
     echo "platform/apps/crossplane.yaml doesn't say which Crossplane the cluster runs"
     return 1
