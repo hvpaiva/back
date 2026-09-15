@@ -100,11 +100,15 @@ The ApplicationSet that creates the services' Applications reads fields from eac
 
 Services run in namespaces that don't exist yet, so their Applications create them (`CreateNamespace=true`). A namespace is a cluster-wide object, which the `apps` project would otherwise reject. The project allows it by name: `*-staging` and `*-production`, and nothing else.
 
-### Moving a service between front doors costs a gap
+### Moving a service between front doors costs a gap unless the old one goes last
 
-Traefik serves Ingress and Gateway API at the same time, so a service moves from one to the other by changing a parameter, and nothing about the service changes. The move is not seamless, though. Argo CD deletes the Ingress and creates the HTTPRoute in the same sync, and Traefik takes a moment to serve the new one, so the address stops answering for about two tenths of a second: measured twice, 28 failed requests out of 1225 on one stage and 18 out of 645 on the other. One request per route would have found nothing, which is how a migration like this gets called seamless.
+Traefik serves Ingress and Gateway API at the same time, so a service moves from one to the other by changing a parameter, and nothing about the service changes. By default the move isn't seamless, though. Argo CD deletes the Ingress and creates the HTTPRoute in the same sync, and Traefik takes a moment to serve the new one, so the address stops answering for about two tenths of a second. That was measured twice: 28 failed requests out of 1225 on one stage, and 18 out of 645 on the other. One request per route would have found nothing, which is how a migration like this gets called seamless.
 
 The gap belongs to the swap, not to the route. A route created on its own starts serving within 66 to 179 ms of `kubectl apply`, and only the first Gateway route a cluster ever gets costs an extra miss, while Traefik's provider wakes up.
+
+So the services' Applications sync with `PruneLast=true`: deleting what a sync replaces becomes its last step, after everything else it applied reports healthy. Production moved to its route that way. The route was created, Argo CD waited until the Gateway had accepted it, and the Ingress went two seconds later. All 968 requests made in those eight seconds answered 200.
+
+The cost shows when the replacement never becomes healthy. The sync keeps the old object and waits, and Argo CD refuses any other sync of that Application meanwhile: `another operation is already in progress`. The wait ends when the replacement declares itself failed. For a Deployment that's its progress deadline, ten minutes unless the chart sets another. The sync then fails with the old object still in place, and Argo CD doesn't try that commit again on its own. Terminating the operation lets a fix through at once, and the fix removes the old object as soon as it's healthy.
 
 ### Argo CD has permissions of its own
 

@@ -68,7 +68,13 @@ Helm is how many teams already package their services. Here the platform maintai
 
 ### Which front door serves a service is the platform's to set, not the service's
 
-Traefik serves Ingress and Gateway API at the same time, so `platform.route` in the ApplicationSet moves one stage at a time and a service's values mention neither; hello runs both today, staging on a route and production on an Ingress. A service that had to choose would be a service that has to be changed every time the platform migrates.
+Traefik serves Ingress and Gateway API at the same time, so `platform.route` in the ApplicationSet moves one stage at a time and a service's values mention neither; hello moved that way, staging first and production after it, and both stages run on routes now. A service that had to choose would be a service that has to be changed every time the platform migrates.
+
+### What a service's sync replaces is removed last
+
+The services' Applications sync with `PruneLast=true`. An object a change replaces, like the Ingress a route takes over from, is deleted only after everything else in the sync is healthy. The same move from an Ingress to a route lost about two tenths of a second of requests without it, and none with it ([measured](platform-notes.md#moving-a-service-between-front-doors-costs-a-gap-unless-the-old-one-goes-last)).
+
+The price comes with a broken replacement. The old object keeps serving, but the sync waits for the replacement to fail, up to ten minutes for a Deployment, and no other sync of that service starts until then, or until someone terminates the one that's waiting.
 
 ### The platform provides the Dockerfile, one per language
 

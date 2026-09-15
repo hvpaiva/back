@@ -226,24 +226,31 @@ git checkout platform/apis/cache/composition.yaml
 
 ### Move a service to the other front door
 
-Traefik serves Ingress and Gateway API at once, and which one a stage uses is a line in `platform/apps/applicationset.yaml`. Staging already runs on a route; production is still on an Ingress:
+Traefik serves Ingress and Gateway API at once, and which one a stage uses is a line in `platform/apps/applicationset.yaml`. Both stages run on routes, so move production back to an Ingress:
 
 ```diff
                  - repo: https://github.com/hvpaiva/back-hello.git
                    stage: production
                    branch: main
--                  route: ingress
-+                  route: gateway
+-                  route: gateway
++                  route: ingress
 ```
+
+Start asking production in another terminal first. It prints a line each time the answer changes, and the rest when you stop it:
+
+```sh
+while true; do curl -s -o /dev/null -w '%{http_code}\n' http://hello.localhost/healthz; done | uniq -c
+```
+
+Then move it:
 
 ```sh
 just diff root                                     # one line of the ApplicationSet's list changes
 just local root
 kubectl -n hello-production get ingress,httproute
-curl -s -o /dev/null -w '%{http_code}\n' http://hello.localhost
 ```
 
-The Ingress goes and a route takes its place, at the same address and with one catch worth seeing: for about two tenths of a second, neither serves. Hammer it and you'll watch that happen; ask once and you'll never know it was there ([why](platform-notes.md#moving-a-service-between-front-doors-costs-a-gap)).
+The route goes and an Ingress takes its place, at the same address. Argo CD deletes the route only after the Ingress reports healthy, which kept every request answering when production moved the other way. Take `PruneLast=true` out of the ApplicationSet's template as well, and the old front door goes in the same step as the new one arrives: that's the gap of about two tenths of a second that [platform notes](platform-notes.md#moving-a-service-between-front-doors-costs-a-gap-unless-the-old-one-goes-last) measured.
 
 Nothing in back-hello changed, which is the whole point: the front door is the platform's business, and a service that had to be edited for this would be a service the platform can't migrate on its own. Then clean up after yourself:
 
