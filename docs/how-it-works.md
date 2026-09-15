@@ -75,7 +75,7 @@ Every service is deployed by the same chart, `charts/app`, fed by the service's 
 
 ### Argo CD and what it delivers
 
-`just up` installs Argo CD from its Helm chart and applies the projects and `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp, Crossplane, CloudNativePG, cert-manager and the cluster's RBAC, then the platform's APIs and CloudNativePG's backup plugin, whose certificates need cert-manager, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
+`just up` installs Argo CD from its Helm chart and applies the projects and `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp, Crossplane, CloudNativePG, cert-manager and the cluster's RBAC, then the platform's APIs, plus CloudNativePG's backup plugin and Prometheus, whose certificates need cert-manager, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
 
 | Project | May read from | May deliver to | Cluster-wide objects |
 |---|---|---|---|

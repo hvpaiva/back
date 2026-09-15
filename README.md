@@ -65,6 +65,7 @@ Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at th
 | Crossview | http://crossview.localhost (the requests, what each composed, and the providers behind them) |
 | hello | http://hello.staging.localhost and http://hello.localhost |
 | Traefik | http://traefik.localhost/dashboard/ |
+| Prometheus | http://prometheus.localhost (the requests Traefik served, by service and status code) |
 | The cloud account | http://stackport.localhost (what the platform created in it), or `aws s3 ls` from this directory |
 | Crossplane | Crossview, above, or `kubectl get providers,functions` |
 
@@ -117,7 +118,7 @@ Argo CD can report each deployment back to GitHub: the deployed commit gets an `
 In this repository:
 
 - `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account (MiniStack, standing in for AWS). `just` installs it.
-- `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, CloudNativePG with its backup plugin and the cert-manager that plugin needs, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages, its permissions and its connection to the cloud account, and `platform/crossview/` the read access the UI over it runs with; `platform/apis/` holds the APIs services request resources through, each with the example request `just render` and `kubectl apply` take; `platform/rbac/` says what each team can see.
+- `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane and Crossview, CloudNativePG with its backup plugin, Kyverno, Reloader, StackPort, Prometheus, cert-manager for the certificates the backup plugin and Prometheus's webhook use, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/argocd/` holds Argo CD's own values. `platform/crossplane/` holds Crossplane's packages, its permissions and its connection to the cloud account, and `platform/crossview/` the read access the UI over it runs with; `platform/apis/` holds the APIs services request resources through, each with the example request `just render` and `kubectl apply` take; `platform/rbac/` says what each team can see. `platform/reloader/` holds Reloader's permissions, `platform/stackport/` StackPort itself, and `platform/prometheus/` what Prometheus reads that no chart declares.
 - `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls, `service-go.yaml` to check Go services and `service-delivery.yaml` to validate and ship any service. It also holds the platform's own: `ci.yaml` checks it, and `lab.yaml` builds the lab from nothing.
 - `tests/` holds what `just test` checks the platform against: situations for the APIs to render in, services for the chart, and objects for Argo CD's health checks.
 - `scripts/` holds what the longer `just` recipes run.

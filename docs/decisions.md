@@ -174,6 +174,16 @@ Kyverno 1.19 deprecated the original policy kinds and 1.20 removes them, and the
 
 It serves `CleanupPolicy` alone, and nothing in the lab deletes on a timer.
 
+## Metrics
+
+### Prometheus and its operator, without the rest of the stack
+
+Prometheus reads what Traefik counts for every service it routes to: requests by status code, and how long they took. The platform can tell how any service is doing without the service exporting a metric of its own.
+
+It comes from kube-prometheus-stack, for the Prometheus Operator: what to scrape is an object, a `PodMonitor` or a `ServiceMonitor`, and charts such as Argo CD's, Kyverno's and Traefik's can create their own. The rest of the stack is off, since nothing in the lab reads it and each piece costs memory on the one node: Grafana, Alertmanager, the node and kube-state metrics, and the chart's default alerting rules. Traefik comes with the base layer, outside Argo CD, so the monitor that reads it lives in `platform/prometheus/`.
+
+Metrics are kept for ten days on the pod's own disk, and they go with the pod. A company would keep them longer, in storage that outlives a pod, with alerts routed to whoever owns each service.
+
 ## Access
 
 ### Identities from client certificates the cluster's CA signs, not from an identity provider
