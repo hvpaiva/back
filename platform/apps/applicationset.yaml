@@ -64,3 +64,5 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
+          # What a sync replaces goes only once its replacement is healthy, so a service changing front doors keeps answering.
+          - PruneLast=true
