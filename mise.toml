@@ -11,7 +11,7 @@ argocd = "3.5.2"
 crossplane = "2.5.0"
 # Matches the Kyverno the platform installs, so the CLI reads policies the way the cluster will.
 kyverno = "1.19.1"
-# Matches the Argo Rollouts the platform installs; kubectl finds it as `kubectl argo rollouts`.
+# Matches the Argo Rollouts the platform installs.
 argo-rollouts = "1.10.0"
 aws-cli = "2.36.43"
 jq = "1.8.2"

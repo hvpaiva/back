@@ -1,4 +1,4 @@
-# Runs a service's canary: its steps, the traffic split on its route, and the analysis that decides.
+# Runs the services' canaries.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -15,9 +15,8 @@ spec:
     helm:
       valuesObject:
         controller:
-          # The chart's default adds a standby for the leader, which one node has no use for.
           replicas: 1
-          # From the plugin's own image rather than a download, so the controller starts without reaching GitHub, on either architecture.
+          # Copied from the plugin's image instead of downloaded at every start.
           initContainers:
             - name: gatewayapi-plugin
               image: ghcr.io/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi:v0.17.0@sha256:bc40d5edf13307e455f6c18cbf9cc79715165cbee8b05a674fd88119f119d4a2
@@ -42,7 +41,6 @@ spec:
             - name: argoproj-labs/gatewayAPI
               location: file:///plugins/rollouts-plugin-trafficrouter-gatewayapi
         providerRBAC:
-          # Traffic moves only on Gateway API routes, so no other router's permissions.
           providers:
             istio: false
             smi: false
@@ -53,6 +51,14 @@ spec:
             apisix: false
             contour: false
             glooPlatform: false
+        dashboard:
+          enabled: true
+          readonly: true
+          ingress:
+            enabled: true
+            ingressClassName: traefik
+            hosts:
+              - rollouts.localhost
   destination:
     server: https://kubernetes.default.svc
     namespace: argo-rollouts

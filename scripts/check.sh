@@ -118,7 +118,7 @@ prometheus() {
   echo "v$version, reads Traefik's metrics, http://prometheus.localhost"
 }
 
-# The controller exits before taking its lease when a plugin doesn't load, so a ready pod holding a live lease runs with them.
+# A controller that can't load a plugin exits before taking the lease.
 rollouts() {
   local version plugins lease holder age duration
   version=$(kubectl --namespace argo-rollouts get deployment argo-rollouts \
@@ -139,7 +139,11 @@ rollouts() {
     echo "${version##*:} loads no traffic router plugin, so no canary can move traffic on a route"
     return 1
   fi
-  echo "${version##*:}, moves traffic with $plugins (kubectl argo rollouts list rollouts --all-namespaces)"
+  if ! web -o /dev/null http://rollouts.localhost/rollouts/api/v1/rollouts/argo-rollouts/info 2>/dev/null; then
+    echo "its dashboard can't list Rollouts: kubectl --namespace argo-rollouts logs deployment/argo-rollouts-dashboard"
+    return 1
+  fi
+  echo "${version##*:}, moves traffic with $plugins, http://rollouts.localhost"
 }
 
 crossplane_packages() {
