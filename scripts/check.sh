@@ -154,7 +154,7 @@ crossplane_packages() {
 }
 
 reloader() {
-  local watched kinds namespace namespaces missing=() unreadable=()
+  local watched kinds namespace namespaces missing=() unreadable=() unpatchable=()
   watched=$(kubectl --namespace reloader get deployment reloader-reloader \
     --output jsonpath='{.spec.template.spec.containers[0].args}' |
     jq -r '.[] | select(startswith("--namespaces=")) | ltrimstr("--namespaces=")')
@@ -178,10 +178,17 @@ reloader() {
     if ! kubectl auth can-i list secrets --namespace "$namespace" \
       --as system:serviceaccount:reloader:reloader-reloader >/dev/null 2>&1; then
       unreadable+=("$namespace")
+    elif ! kubectl auth can-i patch rollouts.argoproj.io --namespace "$namespace" \
+      --as system:serviceaccount:reloader:reloader-reloader >/dev/null 2>&1; then
+      unpatchable+=("$namespace")
     fi
   done
   if ((${#unreadable[@]} > 0)); then
     echo "can't read Secrets in ${unreadable[*]}: nothing binds the reloader ClusterRole there"
+    return 1
+  fi
+  if ((${#unpatchable[@]} > 0)); then
+    echo "can't restart Rollouts in ${unpatchable[*]}: platform/reloader/rbac.yaml doesn't grant it"
     return 1
   fi
   echo "watches $watched"

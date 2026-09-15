@@ -15,6 +15,7 @@ spec:
           reloader:
             # The default strategy adds an env var to the pod template, which self-heal takes back out.
             reloadStrategy: annotations
+            isArgoRollouts: true
             # Watching every namespace means reading every Secret in the cluster, Argo CD's included.
             watchGlobally: false
             namespaces:
