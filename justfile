@@ -66,7 +66,7 @@ argocd-login user="platform-admin":
 headlamp-token:
     @kubectl --namespace headlamp create token headlamp --duration 24h
 
-# Point the lab at your forks: replaces github.com/hvpaiva/ in platform/ with your account and commits
+# Point the lab at your forks: replaces hvpaiva with your account in platform/ and in the workflows services call, and commits
 use-fork owner:
     @scripts/use-fork.sh {{owner}}
 

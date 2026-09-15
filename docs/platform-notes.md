@@ -210,6 +210,10 @@ On `main`, CI rewrites `image:` in `values-production.yaml` on every promotion, 
 
 The service's CI commits the new image to its own repository. Commits pushed with the workflow's built-in token don't start new workflow runs, which is what keeps that from looping.
 
+### A push that changes a workflow needs a credential allowed to
+
+GitHub refuses a push that creates or changes anything under `.github/workflows/` unless the credential behind it may change workflows: "refusing to allow an OAuth App to create or update workflow ... without `workflow` scope". A token that pushes everything else can still be refused. An SSH key is allowed, and so is a token with the `workflow` scope. Changing the platform's workflows takes one of them, and so does pushing the commit `just use-fork` makes, since it rewrites the platform repository the workflows services call check out.
+
 ## Tools around the platform
 
 ### The argocd CLI and Traefik

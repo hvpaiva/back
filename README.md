@@ -87,12 +87,13 @@ From there, [things to try](docs/experiments.md) goes on with the rest.
 Watching a change flow through the lab means pushing to repositories Argo CD watches, so you need your own copies. These steps are on you; the lab can't do them:
 
 1. Fork [back](https://github.com/hvpaiva/back) and [back-hello](https://github.com/hvpaiva/back-hello). When forking back-hello, uncheck *Copy the main branch only*: the lab deploys its `staging` branch too.
-2. Turn on GitHub Actions in your back-hello fork. GitHub disables workflows in forks; the Actions tab has the button.
+2. Turn on GitHub Actions in your back-hello fork. GitHub disables workflows in forks; the Actions tab has the button. In the same fork, change `hvpaiva/back` to your account in the two `uses:` lines of `.github/workflows/ci.yaml`, on both branches, so its CI runs your platform's workflows.
 3. Point the lab at your forks, from a clone of your back fork:
    ```sh
-   just use-fork <your-github-user>   # rewrites the repository URLs in platform/ and commits
+   just use-fork <your-github-user>   # rewrites hvpaiva in platform/ and in the workflows services call, and commits
    git push
    ```
+   GitHub takes that push only from a credential allowed to change workflows ([why](docs/platform-notes.md#a-push-that-changes-a-workflow-needs-a-credential-allowed-to)).
 4. Start the lab with `just up`, or run `just argocd` if it's already running.
 
 Then push a change to your back-hello `staging` branch. CI builds `ghcr.io/<you>/back-hello` and commits the new image, and within a minute or so Argo CD rolls it out: the page at http://hello.staging.localhost reloads with the new version. If the pods can't pull the image, GitHub created the package as private; make it public in the package settings.
