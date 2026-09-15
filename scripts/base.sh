@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
-# The layer `just up` installs before Argo CD takes over, in the order it installs them: the cluster,
-# the Gateway API and Traefik, the cloud account, and Argo CD's own first install. Each step reports one
-# line, and keeps the tool's output for when it fails.
-#
-#   scripts/base.sh cluster      the kind cluster, with kubectl pointed at it (just cluster)
-#   scripts/base.sh gateway      the Gateway API CRDs and Traefik (just gateway)
-#   scripts/base.sh cloud        the cloud account and the DNS rule it needs (just cloud)
-#   scripts/base.sh argocd       Argo CD, its projects and the root Application (just argocd)
-#   scripts/base.sh down         delete the cluster and the lab's contexts (just down)
+# The base layer, installed before Argo CD takes over (just cluster, gateway, cloud, argocd and down).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh

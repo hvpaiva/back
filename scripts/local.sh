@@ -1,16 +1,9 @@
 #!/usr/bin/env bash
-# What this working copy would change, and running it instead of Git (just diff, just local,
-# just gitops). Argo CD enforces Git, and root enforces the Applications' own spec, so taking one
-# over means pausing both: otherwise root undoes it within a minute.
-#
-#   scripts/local.sh diff apis     what applying platform/apis/ from here would change
-#   scripts/local.sh apply apis    apply it, and stop Argo CD from putting Git back
-#   scripts/local.sh gitops        put every Application back under Git
+# Diffs or applies an Application from this working copy, and hands them all back to Git (just diff, local and gitops).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
-# The CLI keeps its login in .argocd/, and only platform-admin may change an Application.
 login() {
   local said
   argocd account get-user-info --output json 2>/dev/null | jq -e '.loggedIn' >/dev/null && return
@@ -23,14 +16,12 @@ login() {
   fi
 }
 
-# Applications whose last sync came from a folder: Argo CD keeps comparing them against it, not Git.
+# A sync from a folder leaves its manifests in the operation state, and Argo CD keeps comparing against them.
 pinned_to_disk() {
   kubectl --namespace argocd get applications --output json |
     jq -r '.items[] | select(((.status.operationState.operation.sync.manifests // []) | length) > 0) | .metadata.name'
 }
 
-# The folder of this repository an Application delivers, when Argo CD can sync it from disk at all:
-# that takes one source pointing at a path here. Messages go to stderr: the caller reads stdout.
 source_path() { # app
   local app=$1 application path
   if ! application=$(kubectl --namespace argocd get application "$app" --output json 2>/dev/null); then
@@ -73,6 +64,7 @@ case ${1:-} in
     path=$(source_path "$2") || exit 1
     section "Syncing $2 from $path"
     login
+    # root would put the Application's sync policy back within a minute, so it pauses too.
     argocd app set root --sync-policy manual >/dev/null
     argocd app set "$2" --sync-policy manual >/dev/null
     run "$2 runs what's in $path, and Argo CD compares it against that folder now, not against Git" \
@@ -86,8 +78,7 @@ case ${1:-} in
     section "Back under Git"
     login
     argocd app set root --sync-policy automated --self-heal --auto-prune >/dev/null
-    # Syncing root restores the Applications it manages, sync policy included, right away. It
-    # refuses while an operation of its own is still running, and that's fine: self-heal gets there.
+    # root refuses while an operation of its own runs, and self-heal restores the rest anyway.
     spin "root follows Git again" argocd app sync root || true
     ok "root follows Git again, and the Applications it manages follow within a minute"
     while IFS= read -r app; do

@@ -21,15 +21,13 @@ for arg in "$@"; do
   esac
 done
 
-lab_node=back-control-plane # kind's node container for the "back" cluster
-ports=(80 443 4566)         # host ports mapped in cluster/kind.yaml
+lab_node=back-control-plane
+ports=(80 443 4566) # host ports mapped in cluster/kind.yaml
 min_ram_gib=8
 min_disk_gib=10
 me=$(id -un)
-family=''      # ubuntu or arch, from /etc/os-release: the systems this script installs packages on
-pkg_manager='' # how that family installs them
-
-# --- Output, prompts, privileges ---------------------------------------------
+family=''
+pkg_manager=''
 
 if [[ -t 1 ]]; then
   bold=$'\e[1m' green=$'\e[32m' yellow=$'\e[33m' red=$'\e[31m' reset=$'\e[0m'
@@ -47,7 +45,6 @@ fail() {
 }
 hint() { printf '        %s\n' "$1"; }
 
-# Succeeds if the user agrees to a change. Never asks in --check mode or without a terminal.
 ask() {
   [[ $mode == check ]] && return 1
   $assume_yes && return 0
@@ -57,7 +54,6 @@ ask() {
   [[ $reply == [yY]* ]]
 }
 
-# Runs a command as root: directly when already root, through sudo otherwise.
 as_root() { if ((EUID == 0)); then "$@"; else sudo "$@"; fi; }
 can_sudo() { ((EUID == 0)) || command -v sudo >/dev/null; }
 apt_install() {
@@ -65,15 +61,13 @@ apt_install() {
     as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null
 }
 
-# Never syncs or upgrades: `pacman -Sy` on its own sets up a partial upgrade that breaks the machine
-# later, and `-Syu` would upgrade all of it, which isn't a lab's business.
+# Never -Sy, a partial upgrade that breaks the machine later, nor -Syu, which upgrades all of it.
 pacman_install() {
   as_root pacman -S --needed --noconfirm "$@" >/dev/null && return 0
   hint "pacman couldn't install $*: if its database is too old, run 'sudo pacman -Syu' and try again"
   return 1
 }
 
-# Installs system packages the way this family does, and fails where the script doesn't know how.
 pkg_install() {
   case $family in
     ubuntu) apt_install "$@" ;;
@@ -82,15 +76,12 @@ pkg_install() {
   esac
 }
 
-# --- System ------------------------------------------------------------------
-
 section "System"
 # shellcheck source=/dev/null
 if [[ -r /etc/os-release ]]; then . /etc/os-release; fi
 system_name=${PRETTY_NAME:-$(uname -sr)}
 if [[ -z ${PRETTY_NAME:-} ]] && command -v sw_vers >/dev/null; then system_name="macOS $(sw_vers -productVersion)"; fi
-# ID_LIKE brings the derivatives along: Mint and Pop!_OS install from Ubuntu's repositories,
-# EndeavourOS and Manjaro from Arch's.
+# ID_LIKE brings derivatives along: Mint and Pop!_OS from Ubuntu, EndeavourOS and Manjaro from Arch.
 case " ${ID:-} ${ID_LIKE:-} " in
   *" ubuntu "*) family=ubuntu pkg_manager=apt ;;
   *" arch "*) family=arch pkg_manager=pacman ;;
@@ -102,8 +93,6 @@ elif [[ -n $family ]]; then
 else
   warn "$system_name: the lab is tested on Ubuntu 24.04 and Omarchy; install system packages (curl, git, OpenSSL, Docker) yourself"
 fi
-
-# --- Base tools --------------------------------------------------------------
 
 section "Base tools"
 missing=()
@@ -117,8 +106,6 @@ if ((${#missing[@]} > 0)); then
     fail "missing: ${missing[*]}"
   fi
 fi
-
-# --- Docker ------------------------------------------------------------------
 
 section "Docker"
 
@@ -140,7 +127,6 @@ install_docker_ubuntu() {
     { ((EUID == 0)) || as_root usermod -aG docker "$me"; }
 }
 
-# Arch ships Docker itself. Installing it doesn't start its daemon, which the next section offers to.
 install_docker_arch() {
   pacman_install docker &&
     { ((EUID == 0)) || as_root usermod -aG docker "$me"; }
@@ -159,8 +145,7 @@ case $family in
   *) docker_source='' ;;
 esac
 
-# podman-docker installs /usr/bin/docker as a script that runs podman instead. kind can drive podman,
-# but only when told to (KIND_EXPERIMENTAL_PROVIDER=podman), and nothing here is tested that way.
+# podman-docker's docker runs podman, which kind drives only with KIND_EXPERIMENTAL_PROVIDER=podman.
 docker_is_podman() {
   local bin
   bin=$(readlink -f "$(command -v docker)") || return 1
@@ -207,7 +192,6 @@ docker_ok=false
 case $state in
   ok)
     docker_ok=true
-    # Version and storage driver in one call; podman's shim knows neither field, and said so above.
     ok "$(docker info --format 'Docker {{.ServerVersion}} is running ({{.Driver}})' 2>/dev/null || docker --version)"
     ;;
   missing)
@@ -232,8 +216,6 @@ case $state in
     fi
     ;;
 esac
-
-# --- Resources ---------------------------------------------------------------
 
 section "Resources"
 if [[ -r /proc/meminfo ]]; then
@@ -262,8 +244,6 @@ elif ((free_gib >= min_disk_gib)); then
 else
   warn "$free_gib GiB free for Docker: the lab uses about 8 GiB and grows as components are added ($min_disk_gib GiB recommended)"
 fi
-
-# --- Ports -------------------------------------------------------------------
 
 section "Ports"
 port_in_use() {
@@ -297,8 +277,6 @@ else
   done
 fi
 
-# --- mise and the toolchain --------------------------------------------------
-
 section "mise"
 mise_bin=$(command -v mise) || mise_bin=''
 if [[ -z $mise_bin && -x $HOME/.local/bin/mise ]]; then mise_bin=$HOME/.local/bin/mise; fi
@@ -313,7 +291,7 @@ if [[ -z $mise_bin ]]; then
 else
   ok "mise $("$mise_bin" --version 2>/dev/null | cut -d' ' -f1)"
 
-  # The versions pinned in mise.toml. No stdin, so mise can't prompt on its own.
+  # No stdin, so mise can't prompt on its own.
   toolchain_status() { "$mise_bin" ls --local --missing </dev/null 2>&1; }
   if ! status=$(toolchain_status) || [[ -n $status ]]; then
     if ask "Install the toolchain pinned in mise.toml (trusts the file; tools go under ~/.local/share/mise)?"; then
@@ -341,7 +319,6 @@ else
     ok "toolchain from mise.toml installed"
   fi
 
-  # Activation puts the pinned tools and mise.toml's [env] into your shell.
   if [[ -n ${MISE_SHELL:-} ]]; then
     ok "mise is active in this shell"
   else
@@ -364,8 +341,7 @@ else
       hint "$activate_line"
     fi
 
-    # mise.toml's [env] is what keeps the tools on the lab: without it, kubectl reads your own
-    # kubeconfig and the AWS CLI your own credentials.
+    # Without mise.toml's [env], kubectl reads your own kubeconfig and the AWS CLI your own credentials.
     shadowed=()
     for tool in kubectl helm argocd aws; do
       tool_path=$(command -v "$tool") || continue
@@ -376,8 +352,6 @@ else
     fi
   fi
 fi
-
-# --- Summary -----------------------------------------------------------------
 
 section "Summary"
 if ((problems > 0)); then

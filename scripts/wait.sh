@@ -15,8 +15,6 @@ for _ in $(seq 120); do
      ((.status.operationState.syncResult.resources // []) | map(select(.status == "SyncFailed")) | length)] | @tsv')
   pending=$(awk -F'\t' '$2 != "Synced" || $3 != "Healthy" { print $1 }' <<<"$apps" | paste -sd ' ' -)
   count=$(awk 'NF { n++ } END { print n + 0 }' <<<"$apps")
-  # An Application that can't apply part of itself stays OutOfSync and calls itself Healthy, so waiting
-  # for it without saying why would look like the lab is simply slow.
   failed=$(awk -F'\t' '$4 > 0 { print $1 }' <<<"$apps" | paste -sd ' ' -)
   if [[ -n $failed && $failed != "$last_failed" ]]; then
     warn "$failed: something in it wouldn't apply, and Argo CD keeps trying"

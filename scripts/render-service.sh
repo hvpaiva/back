@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
-# Renders a service through the platform's chart, for every stage, the way the delivery workflow validates
-# a pull request, and checks what it renders against the schemas it has to satisfy (just render-service
-# [path]). The manifests that pass go to stdout and the verdict to stderr, and with the lab running each
-# stage is also put to the API server as a dry run.
-#
-#   scripts/render-service.sh                            ../back-hello/charts/hello
-#   scripts/render-service.sh ../back-other/charts/api   another service, from its chart folder
-#   scripts/render-service.sh tests/services/everything  a service asking for everything the chart offers
+# Renders a service through the chart for every stage, as CI validates a pull request, and checks it against its schemas (just render-service).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
@@ -19,7 +12,6 @@ if [[ ! -f $chart/values.yaml ]]; then
   echo "no values.yaml in $chart" >&2
   exit 2
 fi
-# The release name only names the Helm release: the objects are named after application.name.
 service=$(basename "$chart")
 
 work=$(mktemp -d)
@@ -69,8 +61,7 @@ for render in "${renders[@]}"; do
   fi
 done
 
-# What Helm and the schemas can't check: the API server's own validation, whatever admission adds. The
-# namespace is Argo CD's to pick, so the dry run uses the current one.
+# The namespace is Argo CD's to pick, so the dry run uses the current one.
 if kubectl cluster-info >/dev/null 2>&1; then
   for render in "${renders[@]}"; do
     [[ -z ${problem[$render]:-} ]] || continue

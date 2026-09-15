@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Puts the lab back the way Git describes it, without rebuilding it (just reset): the requests nobody
-# committed go, with what they left in the cloud account, every Application follows Git again, and
-# the cloud account comes back if an experiment stopped it. It never touches this working copy.
+# Undoes the experiments without rebuilding the lab, and never touches this working copy (just reset).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh

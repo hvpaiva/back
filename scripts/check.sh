@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# Smoke-tests the lab from the host (just check): every component answers, every identity
-# authenticates, hello runs in both stages and reaches its bucket and its database, and every
-# database has a recent backup.
+# Smoke-tests the lab from the host (just check).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
-# Prints what the command printed, as ok when it succeeded and as fail otherwise.
 report() { # name command...
   local name=$1 said
   shift
@@ -18,7 +15,6 @@ report() { # name command...
   fi
 }
 
-# A component that stops answering has to fail its line, not hang the whole check.
 web() { curl -fsS --max-time 30 "$@"; }
 
 gateway() {
@@ -48,7 +44,6 @@ crossview() {
   fi
   granted=$(kubectl get clusterrole crossview \
     --output jsonpath='{range .rules[*]}{range .apiGroups[*]}{@}{","}{end}{end}')
-  # A group it can't read leaves its pages shorter, with no error there or anywhere else.
   while IFS= read -r group; do
     [[ -n $group && ",$granted" != *",$group,"* ]] && missing+=("$group")
   done < <({
@@ -63,7 +58,7 @@ crossview() {
   echo "http://crossview.localhost"
 }
 
-# Its page answers before it can reach the cloud account, and the lab gives it no way to write there.
+# Its page answers before it can reach the cloud account, so ask its API.
 stackport() {
   local status writes account
   read -r status writes < <(web http://stackport.localhost/api/health |
@@ -99,8 +94,6 @@ kyverno() {
   policies=$(kubectl get "$kinds" --all-namespaces --output name 2>/dev/null | wc -l)
   webhooks=$(kubectl get validatingwebhookconfiguration kyverno-resource-validating-webhook-cfg \
     --output json | jq '.webhooks | length')
-  # Kyverno fills that webhook from the policies it finds; empty with policies in the cluster
-  # means every write is passing straight through.
   if ((policies > 0 && webhooks == 0)); then
     echo "$policies policies, and nothing reaches its webhook: kubectl --namespace kyverno logs deployment/kyverno-admission-controller"
     return 1
@@ -115,8 +108,6 @@ crossplane_packages() {
       else error("some packages are not healthy: kubectl get providers,functions") end'
 }
 
-# Reloader only watches the namespaces it was given, and a service in any other one would keep
-# running with the Secret it started with.
 reloader() {
   local watched kinds namespace namespaces missing=() unreadable=()
   watched=$(kubectl --namespace reloader get deployment reloader-reloader \

@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
-# The lab's identities: each gets a kubectl context, with a certificate signed by the cluster's CA
-# that names its user and group, and an Argo CD password. In a company, an identity provider would
-# supply both.
-#
-#   scripts/identities.sh          issue what's missing (just identities)
-#   scripts/identities.sh check    check that each context authenticates, in its group
-#   scripts/identities.sh login    log the argocd CLI in as one of them (just argocd-login)
-#   scripts/identities.sh remove   remove the contexts from the lab's kubeconfig (just down)
+# The lab's identities, each with a kubectl context and an Argo CD password (just identities and argocd-login).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
 
-identities=(dev:team-a platform-admin:platform) # user:group
+identities=(dev:team-a platform-admin:platform)
 days=30
 
 authenticates() { # user group
@@ -44,8 +37,7 @@ issue_certificate() { # user group
   kubectl config set-context "$user" --cluster="$cluster" --user="$user" >/dev/null
 }
 
-# Argo CD keeps bcrypt hashes in argocd-secret; the passwords stay in the cluster, next to them,
-# like the one Argo CD generates for its built-in admin.
+# The plain passwords stay in a Secret beside the hashes, as Argo CD keeps its own admin's.
 set_passwords() {
   local stored hashes identity user password literals=()
   stored=$(kubectl --namespace argocd get secret argocd-account-passwords --output json 2>/dev/null || echo '{}')

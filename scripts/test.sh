@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# Checks what this repository defines, the way CI checks it, with no cluster needed (just test [area...]).
-# With the lab running, what can also be put to its API server is.
-#
-#   scripts/test.sh                  every area: scripts, health, apis, services, platform
-#   scripts/test.sh apis services    only those
+# Checks what this repository defines as CI does, and what it can against the API server when the lab runs (just test).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh

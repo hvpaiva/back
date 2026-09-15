@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Points the lab at your forks: replaces hvpaiva with your account in platform/ and in the workflows
-# services call, and commits (just use-fork <your-github-user>).
+# Points the lab at your forks, and commits (just use-fork).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
