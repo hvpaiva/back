@@ -117,14 +117,14 @@ Both rows are back, about 40 seconds after the request, and the restored databas
 
 ### Change what a service was given
 
-The platform runs Reloader so that a changed Secret reaches the pods already running: it watches the Secrets a pod reads and rolls the Deployment when one of them changes ([why](decisions.md#a-service-restarts-when-the-platform-changes-a-secret-it-handed-it)).
+The platform runs Reloader so that a changed Secret reaches the pods already running: it watches the Secrets a pod reads and starts the service's Rollout again when one of them changes ([why](decisions.md#a-service-restarts-when-the-platform-changes-a-secret-it-handed-it)).
 
 ```sh
 kubectl -n hello-staging patch secret bucket --type merge -p '{"stringData":{"PROBE":"1"}}'
-kubectl -n hello-staging get pods -w
+kubectl argo rollouts get rollout hello --namespace hello-staging --watch
 ```
 
-The pods are replaced within a second or two. Crossplane leaves the extra key alone, owning only the fields it writes itself, so take it back out and the service rolls again:
+A new pod starts within a second or two, and the change reaches the requests the way a new version does: a fifth of them, then half, then all, step by step at http://rollouts.localhost/rollouts/rollout/hello-staging/hello. Crossplane leaves the extra key alone, owning only the fields it writes itself, so take it back out and the service goes through its canary again:
 
 ```sh
 kubectl -n hello-staging patch secret bucket --type json -p '[{"op":"remove","path":"/data/PROBE"}]'
@@ -250,7 +250,7 @@ just local root
 kubectl -n hello-production get ingress,httproute
 ```
 
-The route goes and an Ingress takes its place, at the same address. Argo CD deletes the route only after the Ingress reports healthy, which kept every request answering when production moved the other way. Take `PruneLast=true` out of the ApplicationSet's template as well, and the old front door goes in the same step as the new one arrives: that's the gap of about two tenths of a second that [platform notes](platform-notes.md#moving-a-service-between-front-doors-costs-a-gap-unless-the-old-one-goes-last) measured.
+The route goes and an Ingress takes its place, at the same address, and the canary's Service goes with the route. Argo CD deletes them only after the Ingress reports healthy, which kept every request answering in both directions. On the Ingress a canary has no route to move requests on, so it adds pods beside the stable ones, and the requests follow the pods. Take `PruneLast=true` out of the ApplicationSet's template as well, and the old front door goes in the same step as the new one arrives: that's the gap of about two tenths of a second that [platform notes](platform-notes.md#moving-a-service-between-front-doors-costs-a-gap-unless-the-old-one-goes-last) measured.
 
 Nothing in back-hello changed, which is the whole point: the front door is the platform's business, and a service that had to be edited for this would be a service the platform can't migrate on its own. Then clean up after yourself:
 
@@ -304,7 +304,7 @@ Both of these reach the cluster by pushing, because Argo CD reads the repositori
 
 ### Resize a service and watch it promote
 
-The developer's loop. In back-hello, set `size: medium` in `charts/hello/values-staging.yaml` and push. CI checks the values against the platform's chart before anything is built, Argo CD rolls staging out, and the page at http://hello.staging.localhost shows the new numbers itself: the platform hands every service its size, its replicas and its memory, and hello displays them. Then open a pull request from `staging` to `main` and merge it, and production runs the image staging ran, with production's values.
+The developer's loop. In back-hello, set `size: medium` in `charts/hello/values-staging.yaml` and push. CI checks the values against the platform's chart before anything is built, Argo CD rolls staging out through its canary, and the page at http://hello.staging.localhost shows the new numbers itself: the platform hands every service its size, its replicas and its memory, and hello displays them. Then open a pull request from `staging` to `main` and merge it, and production runs the image staging ran, with production's values.
 
 ### Change the golden path for every service at once
 

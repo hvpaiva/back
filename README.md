@@ -32,7 +32,7 @@ Two perspectives on the same cluster, each with an identity to see it through: `
 
 ### The platform behind it
 
-Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Deployments, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs, with the platform's defaults. A service's request for a bucket becomes an S3 bucket in the lab's cloud account, and a request for a database becomes a Postgres cluster that CloudNativePG runs in the service's namespace, backed up to a bucket of its own. As `platform-admin`, you see all of it.
+Argo CD installs and upgrades everything from Git, itself included. One chart turns what a service declares into Rollouts, Services and routes, with the platform's defaults for probes, resources and security. Workflows the platform maintains, called from each service's CI, check, validate, build and ship every service the same way. Argo CD projects decide what each team may deploy, and where. Crossplane serves the platform's own APIs, with the platform's defaults. A service's request for a bucket becomes an S3 bucket in the lab's cloud account, and a request for a database becomes a Postgres cluster that CloudNativePG runs in the service's namespace, backed up to a bucket of its own. As `platform-admin`, you see all of it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
@@ -60,6 +60,7 @@ Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at th
 | What | Where |
 |---|---|
 | Argo CD | http://argocd.localhost (user `dev` or `platform-admin`, password from `just argocd-password <user>`) |
+| Argo Rollouts | http://rollouts.localhost (the canaries, read-only), or `kubectl argo rollouts get rollout hello --namespace hello-staging --watch` from this directory |
 | kubectl | From this directory: `kubectl --context dev` or `--context platform-admin` |
 | Headlamp | http://headlamp.localhost (token from `just headlamp-token`) |
 | Crossview | http://crossview.localhost (the requests, what each composed, and the providers behind them) |

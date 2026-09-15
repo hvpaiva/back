@@ -42,10 +42,10 @@ database:
 Before any of that, a pull request gets checked: the delivery workflow renders `charts/hello/` with the platform's chart for each stage, so a typo or a size the platform doesn't offer fails in the pull request, with the chart's own message.
 
 1. Push to `staging`. CI runs the tests, builds the image with the platform's Dockerfile for Go, tags it with the commit (`sha-<commit>`) and commits that image to `values-staging.yaml` on the same branch. In GitHub you see the workflow run and a commit from `github-actions[bot]`.
-2. Argo CD notices the commit. It checks the repository every minute, so the `hello-staging` Application goes *OutOfSync*, then *Synced*, while the new pods roll out (*Progressing*) until they're ready (*Healthy*). The Argo CD UI shows each of those steps; Headlamp shows the pods themselves. If the lab has a GitHub App configured, GitHub shows the outcome too: the deployed commit gets an `argocd/hello-staging` status, and the version appears under the repository's Deployments.
+2. Argo CD notices the commit. It checks the repository every minute, so the `hello-staging` Application goes *OutOfSync*, then *Synced*, and the new version starts as a canary beside the old one: a fifth of the requests for half a minute, then half for another, then all of them. The Application reads *Suspended* while a step waits and *Healthy* once the canary is done; http://rollouts.localhost shows each step, and Headlamp shows the pods themselves. If the lab has a GitHub App configured, GitHub shows the outcome too: the deployed commit gets an `argocd/hello-staging` status, and the version appears under the repository's Deployments.
 3. The page updates itself. http://hello.staging.localhost reloads when the new version answers, and the hang tag's barcode changes with the version.
 4. Promote with a pull request from `staging` to `main`. Merging it makes CI copy the image staging was running into `values-production.yaml`. Nothing is rebuilt, so production runs exactly what was tested.
-5. Roll back by reverting the commit that changed the image. Argo CD puts the previous version back.
+5. Roll back by reverting the commit that changed the image. Argo CD puts the previous version back, through the same canary.
 
 At no point does the developer (or CI) talk to the cluster. Git is the only interface, which is also why a new cluster rebuilt from the same repositories ends up running the same versions.
 
@@ -66,8 +66,9 @@ Every service is deployed by the same chart, `charts/app`, fed by the service's 
 | a bucket, with or without versioning, and what to call it | its name in the cloud account, region and credentials, and that removing it never deletes the data |
 | a database, small, medium or large, whether it starts from its backups, and what to call it | its address, how many instances run, the memory for each and the disk it starts with, its backups, and that removing it never deletes the data |
 | | non-root user, read-only filesystem, no Kubernetes API token |
+| | how a new version reaches the requests: a canary taking a fifth of them, then half, then all |
 
-`values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed without touching a single service repository: hello moved from an Ingress to Traefik's Gateway one stage at a time, with a line per stage in the ApplicationSet, and hello's own values mention neither.
+`values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed without touching a single service repository: hello moved from an Ingress to Traefik's Gateway one stage at a time, with a line per stage in the ApplicationSet, and hello's own values mention neither. Its canary came the same way, from a change to the chart.
 
 ### The base layer
 
@@ -75,7 +76,7 @@ Every service is deployed by the same chart, `charts/app`, fed by the service's 
 
 ### Argo CD and what it delivers
 
-`just up` installs Argo CD from its Helm chart and applies the projects and `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Headlamp, Crossplane, CloudNativePG, cert-manager and the cluster's RBAC, then the platform's APIs, plus CloudNativePG's backup plugin and Prometheus, whose certificates need cert-manager, then the ApplicationSet that creates the services, whose requests need those APIs. The same folder holds the AppProjects that separate the platform from the teams:
+`just up` installs Argo CD from its Helm chart and applies the projects and `platform/root.yaml`. That root Application delivers every manifest in `platform/apps/`, including an Application for Argo CD itself: from then on, upgrading Argo CD or adding a component to the platform is a commit. It delivers them in waves and waits for each to be healthy: the projects, then Argo CD, Argo Rollouts, Headlamp, Crossplane, CloudNativePG, cert-manager and the cluster's RBAC, then the platform's APIs, plus CloudNativePG's backup plugin and Prometheus, whose certificates need cert-manager, then the ApplicationSet that creates the services, whose requests need those APIs and whose Rollouts need Argo Rollouts. The same folder holds the AppProjects that separate the platform from the teams:
 
 | Project | May read from | May deliver to | Cluster-wide objects |
 |---|---|---|---|

@@ -12,6 +12,7 @@ Almost everything that breaks here breaks at a handoff between two tools, and ea
 | A database isn't ready: its archiving fails, or its restore never finishes | [the request](#the-request) |
 | The service starts but can't reach what it asked for | [the request](#the-request), then [the cloud account](#the-cloud-account) |
 | The page doesn't answer at all | [the service](#the-service) |
+| The Application reads *Suspended* for a minute after a push | [the service](#the-service) |
 | `just up` stops at `kind create cluster` | [the cluster](#the-cluster-wont-come-up) |
 | A check fails on GitHub | [CI](#ci) |
 
@@ -100,9 +101,11 @@ curl -s localhost:4566/health | jq
 
 ```sh
 kubectl -n hello-staging get pods
-kubectl -n hello-staging logs deploy/hello
+kubectl -n hello-staging logs -l app.kubernetes.io/name=hello
 kubectl -n hello-staging get events --sort-by=.lastTimestamp | tail
 ```
+
+A service runs as a Rollout, which `kubectl logs` can't take by name, hence the label. For about a minute after a new version, its Application reads *Suspended* while the canary waits between steps; http://rollouts.localhost shows which step it's on and how the requests are split.
 
 A pod in `CreateContainerConfigError` is missing a Secret it reads its environment from, and `kubectl describe pod` names that Secret (`secret "bucket" not found`). The request that composes the Secret either doesn't exist or hasn't composed it yet, and the pod starts on its own once the Secret is there. `ImagePullBackOff` on a fork means the package GitHub created is private.
 
