@@ -1,0 +1,9 @@
+apiVersion: back.lab/v1alpha1
+kind: Database
+metadata:
+  name: orders
+  namespace: hello-staging
+spec:
+  size: small
+  restore:
+    at: "2026-09-14T19:30:00Z"

@@ -13,6 +13,7 @@ crossplane = "2.5.0"
 kyverno = "1.19.1"
 aws-cli = "2.36.43"
 jq = "1.8.2"
+yq = "4.53.6"
 
 [env]
 # Isolation: here, kubectl and helm only see the lab cluster (kubeconfig in .kube/, git-ignored).

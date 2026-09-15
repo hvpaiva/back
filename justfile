@@ -70,7 +70,7 @@ headlamp-token:
 use-fork owner:
     @scripts/use-fork.sh {{owner}}
 
-# Render one of the platform's APIs against its example request and check it against the schemas
+# Render one of the platform's APIs against its example request, or one of its scenarios, and check it against the schemas
 render api *flags: docker-ready
     @scripts/render.sh {{api}} {{flags}}
 

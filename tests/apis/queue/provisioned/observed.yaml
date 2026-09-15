@@ -1,0 +1,23 @@
+apiVersion: sqs.aws.m.upbound.io/v1beta1
+kind: Queue
+metadata:
+  name: emails-dlq
+  namespace: hello-staging
+  annotations:
+    crossplane.io/composition-resource-name: dead-letter
+status:
+  atProvider:
+    arn: arn:aws:sqs:us-east-1:000000000000:hello-staging-emails-dlq
+    url: http://aws.cloud.svc:4566/000000000000/hello-staging-emails-dlq
+---
+apiVersion: sqs.aws.m.upbound.io/v1beta1
+kind: Queue
+metadata:
+  name: emails
+  namespace: hello-staging
+  annotations:
+    crossplane.io/composition-resource-name: queue
+status:
+  atProvider:
+    arn: arn:aws:sqs:us-east-1:000000000000:hello-staging-emails
+    url: http://aws.cloud.svc:4566/000000000000/hello-staging-emails

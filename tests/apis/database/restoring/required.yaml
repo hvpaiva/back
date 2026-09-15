@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orders-backups-bucket
+  namespace: hello-staging
+data:
+  BUCKET_NAME: aGVsbG8tc3RhZ2luZy1vcmRlcnMtYmFja3Vwcw==
+  AWS_ENDPOINT_URL: aHR0cDovL2F3cy5jbG91ZC5zdmM6NDU2Ng==

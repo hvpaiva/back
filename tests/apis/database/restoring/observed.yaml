@@ -1,0 +1,12 @@
+apiVersion: back.lab/v1alpha1
+kind: Bucket
+metadata:
+  name: orders-backups
+  namespace: hello-staging
+  annotations:
+    crossplane.io/composition-resource-name: backups
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Available

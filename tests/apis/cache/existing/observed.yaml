@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sessions-cache
+  namespace: hello-staging
+  annotations:
+    crossplane.io/composition-resource-name: connection
+data:
+  REDIS_PASSWORD: bm90LWEtcmVhbC1wYXNzd29yZA==

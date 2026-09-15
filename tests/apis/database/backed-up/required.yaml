@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orders-backups-bucket
+  namespace: hello-staging
+data:
+  BUCKET_NAME: aGVsbG8tc3RhZ2luZy1vcmRlcnMtYmFja3Vwcw==
+  AWS_ENDPOINT_URL: aHR0cDovL2F3cy5jbG91ZC5zdmM6NDU2Ng==
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orders-postgres-app
+  namespace: hello-staging
+data:
+  host: b3JkZXJzLXBvc3RncmVzLXJ3
+  port: NTQzMg==
+  dbname: YXBw
+  username: YXBw
+  password: bm90LWEtcmVhbC1wYXNzd29yZA==
+  uri: cG9zdGdyZXNxbDovL2FwcDpub3QtYS1yZWFsLXBhc3N3b3JkQG9yZGVycy1wb3N0Z3Jlcy1ydy5oZWxsby1zdGFnaW5nOjU0MzIvYXBw

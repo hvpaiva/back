@@ -1,0 +1,50 @@
+apiVersion: back.lab/v1alpha1
+kind: Bucket
+metadata:
+  name: orders-backups
+  namespace: hello-staging
+  annotations:
+    crossplane.io/composition-resource-name: backups
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Available
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: orders-backups
+  namespace: hello-staging
+  creationTimestamp: "2026-09-14T19:00:01Z"
+  annotations:
+    crossplane.io/composition-resource-name: store
+status:
+  serverRecoveryWindow:
+    orders-postgres:
+      firstRecoverabilityPoint: "2026-09-14T19:01:00Z"
+      lastSuccessfulBackupTime: "2026-09-14T19:01:00Z"
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: orders-postgres
+  namespace: hello-staging
+  creationTimestamp: "2026-09-14T19:00:05Z"
+  annotations:
+    crossplane.io/composition-resource-name: postgres
+spec:
+  instances: 1
+  storage:
+    size: 1Gi
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: orders-backups
+status:
+  readyInstances: 1
+  conditions:
+    - type: ContinuousArchiving
+      status: "True"
+      reason: ContinuousArchivingSuccess

@@ -1,0 +1,7 @@
+apiVersion: back.lab/v1alpha1
+kind: Queue
+metadata:
+  name: orders
+  namespace: hello-staging
+spec:
+  fifo: true

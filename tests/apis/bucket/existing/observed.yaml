@@ -1,0 +1,9 @@
+# A bucket that already exists, under a name the rule wouldn't give it today.
+apiVersion: s3.aws.m.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  name: reports-787e2a9e522a
+  namespace: hello-staging
+  annotations:
+    crossplane.io/composition-resource-name: bucket
+    crossplane.io/external-name: hello-staging-reports-2025
