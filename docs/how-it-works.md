@@ -108,7 +108,7 @@ Services call them at `main`, so a fix reaches all of them at once.
 - `services`: the chart rendered for the services in `tests/services/` and for the ones the ApplicationSet deploys, from the branches it reads them from, so a chart change that breaks a real service fails before it reaches that service.
 - `platform`: every Application rendered the way Argo CD renders it, each chart with the values the lab gives it, and the base layer under them.
 
-Everything rendered is checked against the schemas of the versions the lab pins. These jobs have no cluster, so what only an API server refuses is asked where there is one: by `just test` while the lab runs, and by a second job that builds the lab from nothing on a fresh machine after every push to `main` and every night, runs `just test` against it, asks the platform for one of everything it offers and resets it.
+Everything rendered is checked against the schemas of the versions the lab pins. These jobs have no cluster, so what only an API server refuses is asked where there is one: by `just test` while the lab runs, and by `lab.yaml`, which builds the lab from nothing on a fresh machine, runs `just test` against it, asks the platform for one of everything it offers and resets it. It runs every night and after any push to `main` that changes more than docs, Dockerfiles or other workflows.
 
 ### Crossplane and the platform's APIs
 

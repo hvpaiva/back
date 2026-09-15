@@ -52,7 +52,7 @@ CI is done once it commits the image; Argo CD tells GitHub when that version is 
 
 ### The platform maintains the services' CI too
 
-It provides checks per language (`service-go.yaml` for now) and one delivery workflow for all, `service-delivery.yaml`. Services call them at `main`, the same trade-off as the chart: a fix reaches every service at once, and so does a mistake. A service that needs stability can pin a commit instead. They share `.github/workflows/` with the platform's own CI, since GitHub calls a reusable workflow from no other folder, so their names carry the difference: `service-*.yaml` is what services call, `ci.yaml` what checks the platform. A repository of their own would separate them further, at the cost of a third repository to fork, and of a change to the chart and the pipeline that validates it landing in two places.
+It provides checks per language (`service-go.yaml` for now) and one delivery workflow for all, `service-delivery.yaml`. Services call them at `main`, the same trade-off as the chart: a fix reaches every service at once, and so does a mistake. A service that needs stability can pin a commit instead. They share `.github/workflows/` with the platform's own CI, since GitHub calls a reusable workflow from no other folder, so their names carry the difference: `service-*.yaml` is what services call; `ci.yaml` and `lab.yaml` check the platform. A repository of their own would separate them further, at the cost of a third repository to fork, and of a change to the chart and the pipeline that validates it landing in two places.
 
 ### One ApplicationSet for every service
 
@@ -228,6 +228,8 @@ Every check CI makes is a recipe first, so a failure on GitHub reads the same on
 
 A Composition decides most of what it composes from what already exists, so a render against the example request alone leaves most of it out: the database's example renders two of its six resources ([why](platform-notes.md#a-render-sees-only-what-a-composition-makes-from-nothing)). A scenario hands the render what a cluster would already hold. They can't sit next to the Compositions, because the Application that delivers the APIs applies every file in their folders.
 
-### The lab is built from nothing after every push to main, and every night
+### The lab is built from nothing after a push that can change it, and every night
 
 It's the only check where Crossplane, the operators and the cloud account actually do what the platform asks, and it keeps the README honest on a fresh Ubuntu 24.04 machine: a chart that moved or an image that vanished upstream shows up there before someone cloning the lab finds it. Argo CD reads the platform from `main`, in CI as anywhere, so this job says whether `main` works, not whether a pull request would.
+
+A build takes about ten minutes, so a push that changes only docs, Dockerfiles or other workflows doesn't start one. Every other push does, even one that only edits comments in a script: a path filter sees which files changed, not what changed in them. The build is a workflow of its own, `lab.yaml`, so `ci.yaml`'s checks don't wait for it, and a newer push cancels a build still under way, which would run the newer platform anyway.

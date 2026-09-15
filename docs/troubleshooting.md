@@ -112,7 +112,7 @@ The route is separate from the pod. If the pod is Running and the address doesn'
 
 ## CI
 
-Each of `ci.yaml`'s checks but one runs an area of `just test`, and is named after it, so `just test apis` reproduces the `apis` check here, line for line. With the lab running, the same command also asks the API server, which CI's checks can't. The `lab` check builds the lab from nothing with the recipes a first run uses; when a step fails, the last one prints the Applications, what Crossplane holds, the pods that aren't running and the end of `.logs/lab.log`.
+Each of `ci.yaml`'s checks runs an area of `just test`, and is named after it, so `just test apis` reproduces the `apis` check here, line for line. With the lab running, the same command also asks the API server, which CI's checks can't. `lab.yaml` builds the lab from nothing with the recipes a first run uses; when a step fails, the last one prints the Applications, what Crossplane holds, the pods that aren't running and the end of `.logs/lab.log`.
 
 ## Starting over
 
