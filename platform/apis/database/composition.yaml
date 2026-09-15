@@ -19,14 +19,22 @@ spec:
           template: |
             {{- $xr := .observed.composite.resource }}
             {{- $observed := .observed.resources | default dict }}
-            {{- $cluster := printf "%s-postgres" $xr.metadata.name }}
+            {{- $name := ternary "database" (printf "%s-database" $xr.metadata.name) (eq $xr.metadata.name "database") }}
+            {{- $service := $name }}
+            {{- /* CNPG stops a cluster's name at 50 characters, and the hash keeps a shortened name unique. */}}
+            {{- if gt (len $service) 50 }}
+              {{- $service = printf "%s-%s" (trunc 41 $service) (trunc 8 (sha256sum $service)) }}
+            {{- end }}
+            {{- /* A cluster that exists keeps its key and its name: under a new key Crossplane deletes it, and its backups are filed under the name. */}}
+            {{- $key := ternary "postgres" "cluster" (hasKey $observed "postgres") }}
+            {{- $existing := dig $key "resource" dict $observed }}
+            {{- $cluster := dig "metadata" "name" $service $existing }}
             {{- $backups := printf "%s-backups" $xr.metadata.name }}
             {{- $sizes := dict
                   "small"  (dict "instances" 1 "disk" "1Gi"  "memory" "256Mi")
                   "medium" (dict "instances" 2 "disk" "5Gi"  "memory" "512Mi")
                   "large"  (dict "instances" 3 "disk" "10Gi" "memory" "1Gi") }}
             {{- $size := get $sizes $xr.spec.size }}
-            {{- $existing := dig "postgres" "resource" dict $observed }}
             {{- /* A disk keeps its first size and a database how it started: volumes can't shrink, not all of them can grow, and a restore only happens at creation. */}}
             {{- $disk := dig "spec" "storage" "size" $size.disk $existing }}
             {{- $recovery := dig "spec" "bootstrap" "recovery" dict $existing }}
@@ -117,7 +125,7 @@ spec:
             metadata:
               name: {{ $cluster }}
               annotations:
-                {{ setResourceNameAnnotation "postgres" }}
+                {{ setResourceNameAnnotation $key }}
                 {{- if $restoring }}
                 # A restored database goes on archiving where its backups came from, on a new timeline.
                 cnpg.io/skipEmptyWalArchiveCheck: enabled
@@ -136,6 +144,14 @@ spec:
                   memory: {{ $size.memory }}
                 limits:
                   memory: {{ $size.memory }}
+              # The address services get: named after the database, not after CNPG's read-write Service.
+              managed:
+                services:
+                  additional:
+                    - selectorType: rw
+                      serviceTemplate:
+                        metadata:
+                          name: {{ $service }}
               {{- if $destination }}
               plugins:
                 - name: barman-cloud.cloudnative-pg.io
@@ -183,26 +199,28 @@ spec:
                 name: barman-cloud.cloudnative-pg.io
             {{- end }}
             {{- with first (getExtraResources . "credentials") }}
+            {{- $host := printf "%s.%s.svc" $service $xr.metadata.namespace }}
             ---
             apiVersion: v1
             kind: Secret
             metadata:
-              name: {{ $xr.metadata.name }}-database
+              name: {{ $name }}
               annotations:
                 {{ setResourceNameAnnotation "connection" }}
             data:
-              PGHOST: {{ index .resource.data "host" }}
+              PGHOST: {{ $host | b64enc }}
               PGPORT: {{ index .resource.data "port" }}
               PGDATABASE: {{ index .resource.data "dbname" }}
               PGUSER: {{ index .resource.data "username" }}
               PGPASSWORD: {{ index .resource.data "password" }}
-              DATABASE_URL: {{ index .resource.data "uri" }}
+              DATABASE_URL: {{ index .resource.data "uri" | b64dec | replace (printf "@%s-rw.%s:" $cluster $xr.metadata.namespace) (printf "@%s:" $host) | b64enc }}
             {{- end }}
             {{- $recoverable := get $window $cluster | default dict }}
             ---
             apiVersion: back.lab/v1alpha1
             kind: Database
             status:
+              address: {{ printf "%s.%s.svc:5432" $service $xr.metadata.namespace }}
               instances: {{ printf "%v/%v" (dig "status" "readyInstances" 0 $existing) $size.instances | quote }}
               disk: {{ $disk }}
               {{- if or $archiving $recoverable }}

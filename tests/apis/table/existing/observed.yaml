@@ -1,0 +1,9 @@
+# A table that already exists, under a name the rule wouldn't give it today.
+apiVersion: dynamodb.aws.m.upbound.io/v1beta1
+kind: Table
+metadata:
+  name: visits-04a6d7a7213a
+  namespace: hello-staging
+  annotations:
+    crossplane.io/composition-resource-name: table
+    crossplane.io/external-name: hello-staging-visits-2025

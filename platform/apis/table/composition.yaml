@@ -18,7 +18,8 @@ spec:
         inline:
           template: |
             {{- $xr := .observed.composite.resource }}
-            {{- $table := printf "%s-%s" $xr.metadata.namespace $xr.metadata.name }}
+            {{- /* A table that already exists keeps the name it was created with: DynamoDB has no rename. */}}
+            {{- $table := dig "table" "resource" "metadata" "annotations" "crossplane.io/external-name" (printf "%s-%s" $xr.metadata.namespace $xr.metadata.name) (.observed.resources | default dict) }}
             {{- $region := "us-east-1" }}
             {{- $types := dict "string" "S" "number" "N" "binary" "B" }}
             {{- $keys := list $xr.spec.partitionKey }}
@@ -35,7 +36,6 @@ spec:
               managementPolicies: [Observe, Create, Update, LateInitialize]
               forProvider:
                 region: {{ $region }}
-                # Billed per request, so nobody has to size read and write capacity.
                 billingMode: PAY_PER_REQUEST
                 hashKey: {{ $xr.spec.partitionKey.name | quote }}
                 {{- with $xr.spec.sortKey }}
@@ -58,7 +58,7 @@ spec:
             apiVersion: v1
             kind: Secret
             metadata:
-              name: {{ $xr.metadata.name }}-table
+              name: {{ ternary "table" (printf "%s-table" $xr.metadata.name) (eq $xr.metadata.name "table") }}
               annotations:
                 {{ setResourceNameAnnotation "connection" }}
             stringData:

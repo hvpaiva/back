@@ -18,11 +18,7 @@ spec:
         inline:
           template: |
             {{- $xr := .observed.composite.resource }}
-            {{- /* The namespace is what makes the name unique; don't repeat what it already says. */}}
             {{- $bucket := printf "%s-%s" $xr.metadata.namespace $xr.metadata.name }}
-            {{- if hasPrefix (printf "%s-" $xr.metadata.name) $xr.metadata.namespace }}
-              {{- $bucket = $xr.metadata.namespace }}
-            {{- end }}
             {{- /* S3 stops at 63 characters, and the hash keeps a shortened name unique. */}}
             {{- if gt (len $bucket) 63 }}
               {{- $bucket = printf "%s-%s" (trunc 54 $bucket) (trunc 8 (sha256sum $bucket)) }}
@@ -64,7 +60,7 @@ spec:
             apiVersion: v1
             kind: Secret
             metadata:
-              name: {{ $xr.metadata.name }}-bucket
+              name: {{ ternary "bucket" (printf "%s-bucket" $xr.metadata.name) (eq $xr.metadata.name "bucket") }}
               annotations:
                 {{ setResourceNameAnnotation "connection" }}
             stringData:

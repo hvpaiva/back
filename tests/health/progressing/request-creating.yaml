@@ -11,4 +11,4 @@ status:
     - type: Ready
       status: "False"
       reason: Creating
-      message: "Unready resources: postgres"
+      message: "Unready resources: cluster"

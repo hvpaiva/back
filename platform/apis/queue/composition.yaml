@@ -20,8 +20,9 @@ spec:
             {{- $xr := .observed.composite.resource }}
             {{- $observed := .observed.resources | default dict }}
             {{- $suffix := ternary ".fifo" "" $xr.spec.fifo }}
-            {{- $queue := printf "%s-%s%s" $xr.metadata.namespace $xr.metadata.name $suffix }}
-            {{- $deadLetter := printf "%s-%s-dlq%s" $xr.metadata.namespace $xr.metadata.name $suffix }}
+            {{- /* A queue that already exists keeps the name it was created with: SQS has no rename. */}}
+            {{- $queue := dig "queue" "resource" "spec" "forProvider" "name" (printf "%s-%s%s" $xr.metadata.namespace $xr.metadata.name $suffix) $observed }}
+            {{- $deadLetter := dig "dead-letter" "resource" "spec" "forProvider" "name" (printf "%s-%s-dlq%s" $xr.metadata.namespace $xr.metadata.name $suffix) $observed }}
             {{- $region := "us-east-1" }}
             {{- $deadLetterArn := dig "dead-letter" "resource" "status" "atProvider" "arn" "" $observed }}
             ---
@@ -67,7 +68,7 @@ spec:
             apiVersion: v1
             kind: Secret
             metadata:
-              name: {{ $xr.metadata.name }}-queue
+              name: {{ ternary "queue" (printf "%s-queue" $xr.metadata.name) (eq $xr.metadata.name "queue") }}
               annotations:
                 {{ setResourceNameAnnotation "connection" }}
             stringData:

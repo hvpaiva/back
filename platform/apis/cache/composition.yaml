@@ -19,7 +19,8 @@ spec:
           template: |
             {{- $xr := .observed.composite.resource }}
             {{- $observed := .observed.resources | default dict }}
-            {{- $name := printf "%s-cache" $xr.metadata.name }}
+            {{- /* A cache that exists keeps its name: its Deployment's selector can't change. */}}
+            {{- $name := dig "server" "resource" "metadata" "name" (ternary "cache" (printf "%s-cache" $xr.metadata.name) (eq $xr.metadata.name "cache")) $observed }}
             {{- $address := printf "%s.%s.svc" $name $xr.metadata.namespace }}
             {{- $sizes := dict
                   "small"  (dict "maxmemory" "64mb"  "memory" "128Mi")
@@ -33,12 +34,11 @@ spec:
             {{- $password = randAlphaNum 32 }}
             {{- end }}
             ---
-            # No operator generates this one, so the Composition does, and reads it back
-            # from the Secret on every later run.
+            # No operator generates the password, so the Composition does, and reads it back on every run.
             apiVersion: v1
             kind: Secret
             metadata:
-              name: {{ $xr.metadata.name }}-cache
+              name: {{ $name }}
               annotations:
                 {{ setResourceNameAnnotation "connection" }}
             stringData:
@@ -88,7 +88,7 @@ spec:
                         - name: VALKEY_PASSWORD
                           valueFrom:
                             secretKeyRef:
-                              name: {{ $xr.metadata.name }}-cache
+                              name: {{ $name }}
                               key: REDIS_PASSWORD
                       ports:
                         - name: valkey

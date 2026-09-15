@@ -1,3 +1,4 @@
+# A database that already exists, its cluster under a name and a key the rule wouldn't give it today.
 apiVersion: back.lab/v1alpha1
 kind: Bucket
 metadata:
@@ -21,18 +22,18 @@ metadata:
     crossplane.io/composition-resource-name: store
 status:
   serverRecoveryWindow:
-    orders-database:
+    orders-postgres:
       firstRecoverabilityPoint: "2026-09-14T19:01:00Z"
       lastSuccessfulBackupTime: "2026-09-14T19:01:00Z"
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: orders-database
+  name: orders-postgres
   namespace: hello-staging
   creationTimestamp: "2026-09-14T19:00:05Z"
   annotations:
-    crossplane.io/composition-resource-name: cluster
+    crossplane.io/composition-resource-name: postgres
 spec:
   instances: 1
   storage:

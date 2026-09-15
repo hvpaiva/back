@@ -15,6 +15,9 @@ spec:
       served: true
       referenceable: true
       additionalPrinterColumns:
+        - name: ADDRESS
+          type: string
+          jsonPath: .status.address
         - name: INSTANCES
           type: string
           jsonPath: .status.instances
@@ -47,6 +50,9 @@ spec:
             status:
               type: object
               properties:
+                address:
+                  type: string
+                  description: Where the database answers, host and port.
                 instances:
                   type: string
                   description: Instances ready, out of the ones the size asks for.

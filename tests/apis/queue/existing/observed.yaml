@@ -1,0 +1,32 @@
+# A queue that already exists, under a name the rule wouldn't give it today.
+apiVersion: sqs.aws.m.upbound.io/v1beta1
+kind: Queue
+metadata:
+  name: emails-dlq
+  namespace: hello-staging
+  annotations:
+    crossplane.io/composition-resource-name: dead-letter
+spec:
+  forProvider:
+    name: hello-staging-emails-2025-dlq
+    region: us-east-1
+status:
+  atProvider:
+    arn: arn:aws:sqs:us-east-1:000000000000:hello-staging-emails-2025-dlq
+    url: http://aws.cloud.svc:4566/000000000000/hello-staging-emails-2025-dlq
+---
+apiVersion: sqs.aws.m.upbound.io/v1beta1
+kind: Queue
+metadata:
+  name: emails
+  namespace: hello-staging
+  annotations:
+    crossplane.io/composition-resource-name: queue
+spec:
+  forProvider:
+    name: hello-staging-emails-2025
+    region: us-east-1
+status:
+  atProvider:
+    arn: arn:aws:sqs:us-east-1:000000000000:hello-staging-emails-2025
+    url: http://aws.cloud.svc:4566/000000000000/hello-staging-emails-2025
