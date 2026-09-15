@@ -63,8 +63,8 @@ Every service is deployed by the same chart, `charts/app`, fed by the service's 
 | the port it listens on | liveness and readiness probes on `/healthz` |
 | a size: small, medium or large | replicas, CPU and memory for each size |
 | whether it's public | the address: `<name>.<stage>.localhost`, `<name>.localhost` in production |
-| a bucket, with or without versioning | its name, region and credentials, and that removing it never deletes the data |
-| a database, small, medium or large, and whether it starts from its backups | how many instances run, the memory for each and the disk it starts with, its backups, and that removing it never deletes the data |
+| a bucket, with or without versioning, and what to call it | its name in the cloud account, region and credentials, and that removing it never deletes the data |
+| a database, small, medium or large, whether it starts from its backups, and what to call it | its address, how many instances run, the memory for each and the disk it starts with, its backups, and that removing it never deletes the data |
 | | non-root user, read-only filesystem, no Kubernetes API token |
 
 `values.schema.json` rejects any field the chart doesn't document, so a typo fails the sync with a message that names it, instead of being silently ignored. And because teams only describe intent, the platform can change how a service is deployed without touching a single service repository: hello is served through Traefik's Gateway in staging and through an Ingress in production, decided one stage at a time in the ApplicationSet, and hello's own values mention neither.
@@ -118,13 +118,15 @@ Everything rendered is checked against the schemas of the versions the lab pins.
 
 | Request | What the platform makes of it |
 |---|---|
-| `Bucket` | an S3 bucket named `<namespace>-<name>`, or just `<namespace>` when that already starts with the name, with versioning if asked for |
+| `Bucket` | an S3 bucket, with versioning if asked for |
 | `Database` | a Postgres cluster that CloudNativePG runs in the namespace: one instance for small, two for medium and three for large, with a disk sized when it's created, and backups in a `Bucket` of its own that a restore starts from |
 | `Queue` | an SQS queue, plus a dead-letter queue where messages land after five failed deliveries |
 | `Table` | a DynamoDB table with the keys asked for, billed per request |
 | `Cache` | a Valkey server in the namespace, Redis-compatible, with a memory cap and a password of its own |
 
-Each one also composes the Secret the service reads its connection from: `<name>-bucket`, `<name>-database`, `<name>-queue`, `<name>-table`, `<name>-cache`. An API can request another one, too: a `Database` asks for a `Bucket` called `<name>-backups` and reads its Secret the way a service would. `Bucket` and `Database` are wired into the chart, with `bucket:` and `database:` in a service's values. A `Queue`, a `Table` or a `Cache` is requested by applying it to a namespace. `kubectl get buckets.back.lab -A` lists the requests, and `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became. Always name a request with its group, as in `databases.back.lab`: CloudNativePG has a `Database` kind of its own. [When something doesn't work](troubleshooting.md) follows that chain to the end.
+What a request makes is named after it. In the cloud account, which every namespace shares, a name starts with the namespace: hello's bucket in staging is `hello-staging-bucket`, and a `Table` called `visits` next to it is `hello-staging-visits`. In the namespace, a name is the request's name followed by its kind, or just the kind when that's what the request is called: a `Database` called `orders` has the Secret `orders-database`, and hello's, called `database`, has `database`. The chart names hello's requests after their kinds, and `name:` under `bucket:` or `database:` picks another. What a service reaches in the cluster has a name the platform gives it, never the name of what runs it: hello's database answers at `database.hello-staging.svc`, not at the Service CloudNativePG creates ([why](decisions.md#a-name-says-whose-a-thing-is-and-what-it-is-never-what-runs-it)).
+
+Each one also composes the Secret the service reads its connection from. An API can request another one, too: a `Database` asks for a `Bucket` called `<name>-backups` and reads its Secret the way a service would. `Bucket` and `Database` are wired into the chart, with `bucket:` and `database:` in a service's values. A `Queue`, a `Table` or a `Cache` is requested by applying it to a namespace. `kubectl get buckets.back.lab -A` lists the requests, and `crossplane resource trace buckets.back.lab <name> -n <namespace>` shows what each one became. Always name a request with its group, as in `databases.back.lab`: CloudNativePG has a `Database` kind of its own. [When something doesn't work](troubleshooting.md) follows that chain to the end.
 
 ### Who can do what
 

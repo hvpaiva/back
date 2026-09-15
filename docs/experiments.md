@@ -65,11 +65,11 @@ Taking the data away is a step of its own, in the account, and `just reset` take
 hello asks for a database in its values, and the chart puts a Usage next to that request. RBAC already stops `dev`, so try it as someone RBAC would let through:
 
 ```sh
-kubectl --context platform-admin -n hello-staging delete databases.back.lab hello
+kubectl --context platform-admin -n hello-staging delete databases.back.lab database
 ```
 
 ```
-admission webhook "nousages.protection.crossplane.io" denied the request: This resource is in-use by 1 usage(s), including the *v1beta1.Usage "hello-database" (in namespace "hello-staging") with reason: "holds hello's data; delete this Usage first to delete the database on purpose".
+admission webhook "nousages.protection.crossplane.io" denied the request: This resource is in-use by 1 usage(s), including the *v1beta1.Usage "database" (in namespace "hello-staging") with reason: "holds hello's data; delete this Usage first to delete the database on purpose".
 ```
 
 The refusal comes from Crossplane. It labels whatever a Usage points at, and its webhook turns away a delete of anything that carries the label. Argo CD never deletes the request or its Usage, so taking `database:` out of hello's values would leave both in place. A Usage doesn't stop a namespace deletion, though: the database goes with its namespace, and what's left of it is its backups ([getting it back](#lose-a-database-and-get-it-back)).
@@ -81,9 +81,9 @@ A database's backups live in the cloud account, so they outlive the database. Th
 ```sh
 kubectl apply -f platform/apis/database/example.yaml
 kubectl -n hello-staging wait --for=condition=ready databases.back.lab/orders --timeout=5m
-kubectl -n hello-staging exec orders-postgres-1 -c postgres -- psql app -c "create table notes (body text)" -c "insert into notes values ('before')"
+kubectl -n hello-staging exec orders-database-1 -c postgres -- psql app -c "create table notes (body text)" -c "insert into notes values ('before')"
 sleep 2 && date -u +%FT%TZ && sleep 2
-kubectl -n hello-staging exec orders-postgres-1 -c postgres -- psql app -c "insert into notes values ('after')"
+kubectl -n hello-staging exec orders-database-1 -c postgres -- psql app -c "insert into notes values ('after')"
 kubectl -n hello-staging get databases.back.lab orders
 ```
 
@@ -91,7 +91,7 @@ The request turns ready in under a minute, and LAST BACKUP fills in a few second
 
 ```sh
 kubectl -n hello-staging delete databases.back.lab orders
-aws s3 ls s3://hello-staging-orders-backups/orders-postgres/
+aws s3 ls s3://hello-staging-orders-backups/orders-database/
 ```
 
 The request, the cluster and its volume go, and the bucket still holds `base/` and `wals/`. Apply the example again, which is what Argo CD would do for a request Git holds, and the database comes back empty: READY stays False, and `kubectl -n hello-staging get databases.back.lab orders -o yaml` says `archiving: failing`, because the plugin won't write a new database's changes over the old one's backups. Delete it again and ask for a restore instead:
@@ -108,7 +108,7 @@ spec:
   restore: {}
 EOF
 kubectl -n hello-staging wait --for=condition=ready databases.back.lab/orders --timeout=5m
-kubectl -n hello-staging exec orders-postgres-1 -c postgres -- psql app -c "select * from notes"
+kubectl -n hello-staging exec orders-database-1 -c postgres -- psql app -c "select * from notes"
 ```
 
 Both rows are back, about 40 seconds after the request, and the restored database goes on archiving where it came from. With `restore: {at: "<the time you kept>"}` instead, only `before` comes back. A service asks for the same thing with `restore: {}` under `database:` in its values, and the platform team deletes the Usage and the database so that Argo CD brings it back restored ([why it works that way](decisions.md#a-restore-is-part-of-the-request-read-when-the-database-is-created)).
@@ -120,14 +120,14 @@ Both rows are back, about 40 seconds after the request, and the restored databas
 The platform runs Reloader so that a changed Secret reaches the pods already running: it watches the Secrets a pod reads and rolls the Deployment when one of them changes ([why](decisions.md#a-service-restarts-when-the-platform-changes-a-secret-it-handed-it)).
 
 ```sh
-kubectl -n hello-staging patch secret hello-bucket --type merge -p '{"stringData":{"PROBE":"1"}}'
+kubectl -n hello-staging patch secret bucket --type merge -p '{"stringData":{"PROBE":"1"}}'
 kubectl -n hello-staging get pods -w
 ```
 
 The pods are replaced within a second or two. Crossplane leaves the extra key alone, owning only the fields it writes itself, so take it back out and the service rolls again:
 
 ```sh
-kubectl -n hello-staging patch secret hello-bucket --type json -p '[{"op":"remove","path":"/data/PROBE"}]'
+kubectl -n hello-staging patch secret bucket --type json -p '[{"op":"remove","path":"/data/PROBE"}]'
 ```
 
 Reloader watches the namespaces the platform names for it, in `platform/apps/reloader.yaml`, and `just check` says which those are.
@@ -137,7 +137,7 @@ Reloader watches the namespaces the platform names for it, in `platform/apps/rel
 ```sh
 kubectl --context dev -n hello-staging get pods,buckets.back.lab
 kubectl --context dev -n hello-staging delete pod --all
-kubectl --context dev -n hello-staging get secret hello-bucket
+kubectl --context dev -n hello-staging get secret bucket
 kubectl --context dev get compositions
 ```
 

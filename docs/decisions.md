@@ -118,13 +118,19 @@ The plugin is what CloudNativePG offers now: the operator's built-in Barman supp
 
 `restore: {}` starts a database from the latest point its backups reach, and `restore: {at: <time>}` from a moment in them. Like the disk, it counts only when the database is created: restoring a database that exists means deleting it, Usage first, and letting it come back with `restore`. The restored database goes on archiving into the folder it came from, on a new timeline, so the moments before the restore stay within reach. A database created empty where an earlier one left backups is refused archiving instead, and stays not ready until it's restored or those backups are removed.
 
-### A bucket that exists keeps the name it was created with
+### A name says whose a thing is and what it is, never what runs it
 
-The naming rule can change and new requests follow it, but S3 has no rename, so the Composition reports the name the bucket actually has instead of the one the rule would give it today.
+A request's name is the name of what it makes. The chart calls hello's requests `bucket` and `database`, and `name:` in a service's values picks another. In the cloud account, which every namespace shares, a name starts with the namespace, `<application>-<stage>-<name>`. Whatever a resource adds to its name goes after that, as CloudNativePG does with its Services and instances and SQS with `.fifo`, so the stage never lands in the middle of one. Inside the namespace, which already says whose it is, a name is the request's name and its kind, `orders-database`, or only the kind when that's what the request is called. A service reaches its database at a Service the platform names, `database.hello-staging.svc`, rather than at the one CloudNativePG creates, so running Postgres some other way wouldn't change the address.
 
-### The Composition owns the name, S3's 63-character limit included
+A service picks the name, not the prefix. A request whose name is already taken in the cloud account adopts what's there, so a free name would let one service take over another's bucket.
 
-Past that limit, the name is cut short and a hash of the full one keeps it unique. Deciding what a request may ask for in the first place is a different job, and it belongs where the cluster admits the request, not where the name is built.
+### What exists keeps the name it was created with
+
+The naming rule can change and new requests follow it, but S3, SQS and DynamoDB have no rename, and Crossplane doesn't rename what a Composition made either ([what it does instead](platform-notes.md#a-composition-cant-rename-what-it-made)). So each Composition reads the names its resources actually have and uses them instead of the ones the rule would give them today. A database whose cluster was created under an earlier rule keeps that cluster's name, and the key it's filed under.
+
+### The Composition owns the name, and the limits that come with it
+
+S3 stops a bucket's name at 63 characters, and CloudNativePG a cluster's at 50. Past a limit, the name is cut short and a hash of the full one keeps it unique. Deciding what a request may ask for in the first place is a different job, and it belongs where the cluster admits the request, not where the name is built.
 
 ### Only the resource types the platform uses are activated
 

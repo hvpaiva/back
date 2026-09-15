@@ -134,6 +134,10 @@ A DynamoDB key is typed with a single letter: S, N or B. Written into a Composit
 
 A Composition runs from scratch on every reconcile, so a password generated in its template would be a different password every time, and the service would be left holding the old one. The `Cache` Composition reads the password back from the Secret it composed and generates one only when there's nothing to read. The `Database` Composition does the same with the disk, which it takes from the cluster it already made rather than from the size. Anything the platform can't recompute has to come from somewhere that keeps it: what was already composed, or whatever generated it in the first place.
 
+### A Composition can't rename what it made
+
+A Composition that starts giving a resource another name doesn't rename the one it made. A Secret whose name changed in the template kept its old name for the four minutes it was watched, and the request kept pointing at it, so whatever else the template built from the new name, a reference or an address, pointed at nothing. Filing the resource under another key in the template is worse: Crossplane deleted the Secret within a second and created it again, which for a database's cluster would be the database. So the Compositions read the names their resources already have, and a cluster keeps the key it was created under.
+
 ### A render sees only what a Composition makes from nothing
 
 `crossplane composition render` starts from an empty cluster unless it's told otherwise, and a Composition that decides from what already exists shows only its first step. The database's example renders a `Bucket` and nothing else: the object store waits for the bucket's Secret, the Postgres cluster for a ready bucket, the backup schedule for working archiving, and the service's Secret for the one CloudNativePG writes. A mistake in any of those passes a render of the example and fails in the cluster. `-o` hands render the resources the Composition already made and `-e` the ones it reads, and the scenarios in `tests/apis/` keep a set of both for each API, which is how a render of the database reaches all six.

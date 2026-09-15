@@ -47,7 +47,7 @@ Two things are worth knowing before hunting further: Argo CD [polls every minute
 A request becomes managed resources, and each of those talks to something outside the cluster.
 
 ```sh
-crossplane resource trace buckets.back.lab hello -n hello-staging
+crossplane resource trace buckets.back.lab bucket -n hello-staging
 ```
 
 The tree shows both conditions for every level. `SYNCED` means Crossplane reconciled the resource without an error; `READY` means whatever is on the other side reports it exists. Synced but not Ready is normal for a few seconds after a request, and permanent when the other side is refusing something.
@@ -59,15 +59,15 @@ kubectl -n hello-staging describe buckets.s3.aws.m.upbound.io   # conditions and
 kubectl -n crossplane-system logs -l pkg.crossplane.io/provider=provider-aws-s3 --tail=30
 ```
 
-If the request produced nothing at all, the Composition itself failed. Crossplane records that on the request (`kubectl -n hello-staging describe buckets.back.lab hello`), and `just render bucket` reproduces it on your machine, without the cluster.
+If the request produced nothing at all, the Composition itself failed. Crossplane records that on the request (`kubectl -n hello-staging describe buckets.back.lab bucket`), and `just render bucket` reproduces it on your machine, without the cluster.
 
 A request whose kind doesn't exist (`no matches for kind`) after its API was applied usually has an XRD the API server refused to turn into a CRD. `kubectl get xrd` lists that XRD without ESTABLISHED, and only an event on it says why: `kubectl describe xrd databases.back.lab`. `just render database` shows the same refusal before anything reaches the cluster ([more](platform-notes.md#an-xrd-the-api-server-refuses-shows-no-error)).
 
 A `Database` composes no managed resources. It composes a CloudNativePG cluster, and the cluster has a status of its own:
 
 ```sh
-kubectl -n hello-staging get databases.back.lab hello             # INSTANCES: ready out of what the size asks for
-kubectl -n hello-staging get clusters.postgresql.cnpg.io hello-postgres
+kubectl -n hello-staging get databases.back.lab database          # INSTANCES: ready out of what the size asks for
+kubectl -n hello-staging get clusters.postgresql.cnpg.io database
 kubectl -n cnpg-system logs deploy/cloudnative-pg --tail=30
 ```
 
@@ -76,17 +76,17 @@ An INSTANCES count that stays below its total means the cluster stopped short, e
 A database's backups show on its request as well: LAST BACKUP in that same line, and in its YAML `restorableFrom`, the earliest moment a restore can go back to. A database whose status says `archiving: failing` isn't ready, and the plugin's container says why:
 
 ```sh
-kubectl -n hello-staging logs hello-postgres-1 -c plugin-barman-cloud | grep -i error
+kubectl -n hello-staging logs database-1 -c plugin-barman-cloud | grep -i error
 ```
 
-`Expected empty archive` means the database started empty where an earlier one left its backups, which is what happens when Argo CD brings back the request of a database that was deleted. Restore it, or remove those backups from its bucket if nobody wants them ([why it refuses](platform-notes.md#a-database-cant-archive-into-backups-that-arent-its-own)). A restore that never finishes shows as a job, `<name>-postgres-1-full-recovery`, whose pods keep failing, and its log names what Postgres refused. `requested timeline 3 is not a child of this server's history` has a way out ([more](platform-notes.md#a-restore-can-start-from-a-timeline-another-restore-left-behind)).
+`Expected empty archive` means the database started empty where an earlier one left its backups, which is what happens when Argo CD brings back the request of a database that was deleted. Restore it, or remove those backups from its bucket if nobody wants them ([why it refuses](platform-notes.md#a-database-cant-archive-into-backups-that-arent-its-own)). A restore that never finishes shows as a job, `database-1-full-recovery` for hello's database, whose pods keep failing, and its log names what Postgres refused. `requested timeline 3 is not a child of this server's history` has a way out ([more](platform-notes.md#a-restore-can-start-from-a-timeline-another-restore-left-behind)).
 
 ## The cloud account
 
 The provider's view and the emulator's view can disagree, and the emulator keeps its state in memory: restart it and every bucket, queue and table is gone, databases' backups included, while Crossplane still believes they exist. Crossplane notices within a minute and creates them again ([why this emulator](decisions.md#ministack-as-the-cloud-account-pinned-by-digest)). A database goes on archiving into its new, empty bucket, but has no full backup to restore from until the next night: within five minutes its status stops naming the lost one, and `just check` says the database was never backed up. Deleting its backup schedule takes a full backup straight away, since the platform composes the schedule again at once:
 
 ```sh
-kubectl -n hello-staging delete scheduledbackups.postgresql.cnpg.io hello-backups
+kubectl -n hello-staging delete scheduledbackups.postgresql.cnpg.io database-backups
 ```
 
 ```sh
@@ -104,7 +104,7 @@ kubectl -n hello-staging logs deploy/hello
 kubectl -n hello-staging get events --sort-by=.lastTimestamp | tail
 ```
 
-A pod in `CreateContainerConfigError` is missing a Secret it reads its environment from, and `kubectl describe pod` names that Secret (`secret "hello-bucket" not found`). The request that composes the Secret either doesn't exist or hasn't composed it yet, and the pod starts on its own once the Secret is there. `ImagePullBackOff` on a fork means the package GitHub created is private.
+A pod in `CreateContainerConfigError` is missing a Secret it reads its environment from, and `kubectl describe pod` names that Secret (`secret "bucket" not found`). The request that composes the Secret either doesn't exist or hasn't composed it yet, and the pod starts on its own once the Secret is there. `ImagePullBackOff` on a fork means the package GitHub created is private.
 
 A database's Secret arrives before the database does. It exists about a second after the request, because CloudNativePG writes the credentials as soon as it creates the cluster, and Postgres took about 20 more seconds to accept connections. A service that tries its database only once, at startup, can miss that window. hello pings on every request, so its page says unreachable until the database answers.
 
@@ -125,7 +125,7 @@ aws dynamodb delete-table --table-name hello-staging-visits
 
 `just reset` takes both steps for every request nobody committed. A request Git holds comes back on Argo CD's next sync and adopts what it had.
 
-A database's request is refused while the Usage next to it exists. Deleting a database on purpose starts with that Usage (`kubectl -n hello-staging delete usages.protection.crossplane.io hello-database`), and the database's volumes go with its request, while its backups stay in its bucket. For a request Git holds, Argo CD then puts both back on its next sync, with an empty database that refuses to archive over those backups until it's restored or they're removed. With `restore: {}` under `database:` in the service's values beforehand, it comes back with its data instead ([try it](experiments.md#lose-a-database-and-get-it-back)). `just reset` deletes the Usages nobody committed before the requests they protect, and the backups of the databases it deletes.
+A database's request is refused while the Usage next to it exists. Deleting a database on purpose starts with that Usage (`kubectl -n hello-staging delete usages.protection.crossplane.io database`), and the database's volumes go with its request, while its backups stay in its bucket. For a request Git holds, Argo CD then puts both back on its next sync, with an empty database that refuses to archive over those backups until it's restored or they're removed. With `restore: {}` under `database:` in the service's values beforehand, it comes back with its data instead ([try it](experiments.md#lose-a-database-and-get-it-back)). `just reset` deletes the Usages nobody committed before the requests they protect, and the backups of the databases it deletes.
 
 Delete requests before their namespace: a namespace deleted with managed resources still in it can get stuck, and so can they ([platform notes](platform-notes.md#deleting-a-namespace-can-strand-its-managed-resources)).
 
