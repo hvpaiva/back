@@ -1,0 +1,66 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+  annotations:
+    # Its webhook's certificate is a cert-manager kind, which doesn't exist until wave 0 is done.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 91.4.0
+      helm:
+        valuesObject:
+          fullnameOverride: prometheus
+          cleanPrometheusOperatorObjectNames: true
+          # Nothing in the lab reads dashboards, alerts or the cluster's own metrics, so only the operator and Prometheus run.
+          defaultRules:
+            create: false
+          alertmanager:
+            enabled: false
+          grafana:
+            enabled: false
+          kubeStateMetrics:
+            enabled: false
+          nodeExporter:
+            enabled: false
+          kubernetesServiceMonitors:
+            enabled: false
+          prometheusOperator:
+            admissionWebhooks:
+              # Instead of Helm hook Jobs, which Argo CD runs on every sync.
+              certManager:
+                enabled: true
+          prometheus:
+            ingress:
+              enabled: true
+              ingressClassName: traefik
+              hosts:
+                - prometheus.localhost
+              paths:
+                - /
+              pathType: Prefix
+            prometheusSpec:
+              # Every monitor in the cluster, not only the ones this chart labels as its own.
+              serviceMonitorSelectorNilUsesHelmValues: false
+              podMonitorSelectorNilUsesHelmValues: false
+              probeSelectorNilUsesHelmValues: false
+              ruleSelectorNilUsesHelmValues: false
+              scrapeConfigSelectorNilUsesHelmValues: false
+    - repoURL: https://github.com/hvpaiva/back.git
+      targetRevision: main
+      path: platform/prometheus
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prometheus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Six of its CRDs exceed client-side apply's 256 KB annotation limit.
+      - ServerSideApply=true
