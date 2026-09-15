@@ -1,0 +1,62 @@
+# The lab built from nothing on a fresh machine, after a push that changes anything a bring-up uses, and every night.
+name: lab
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!**.md"
+      - "!build/**"
+      - "!.github/workflows/**"
+      - .github/workflows/lab.yaml
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  # Argo CD reads the platform from main, so a lab for another ref or an older push would run main as it is now.
+  lab:
+    if: github.ref == 'refs/heads/main'
+    concurrency:
+      group: lab
+      cancel-in-progress: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.5
+      - name: just up
+        run: just up
+      - name: just test, with the API server answering
+        run: just test
+      - name: Ask the platform for one of everything it offers
+        run: |
+          for example in platform/apis/*/example.yaml; do
+            kubectl apply --filename "$example"
+          done
+          for example in platform/apis/*/example.yaml; do
+            kubectl wait --for=condition=ready --timeout=10m --filename "$example"
+          done
+      - name: just reset
+        run: just reset
+      - name: just check
+        run: just check
+      - name: What the lab looked like
+        if: failure()
+        run: |
+          set +e
+          kubectl --namespace argocd get applications
+          kubectl get composite,managed --all-namespaces
+          kubectl get pods --all-namespaces | grep -v -E 'Running|Completed'
+          kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -n 40
+          tail -n 200 .logs/lab.log

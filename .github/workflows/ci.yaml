@@ -1,4 +1,4 @@
-# The platform's own checks: what `just test` runs, and the lab brought up from nothing on a fresh machine.
+# The platform's own checks: what `just test` runs, one job per area.
 name: ci
 
 on:
@@ -37,43 +37,3 @@ jobs:
         env:
           AREA: ${{ matrix.area }}
         run: just test "$AREA"
-
-  # Argo CD reads the platform from main, so a cluster built for any other ref would run main anyway.
-  lab:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-        with:
-          version: 2026.9.5
-      - name: just up
-        run: just up
-      - name: just test, with the API server answering
-        run: just test
-      - name: Ask the platform for one of everything it offers
-        run: |
-          for example in platform/apis/*/example.yaml; do
-            kubectl apply --filename "$example"
-          done
-          for example in platform/apis/*/example.yaml; do
-            kubectl wait --for=condition=ready --timeout=10m --filename "$example"
-          done
-      - name: just reset
-        run: just reset
-      - name: just check
-        run: just check
-      - name: What the lab looked like
-        if: failure()
-        run: |
-          set +e
-          kubectl --namespace argocd get applications
-          kubectl get composite,managed --all-namespaces
-          kubectl get pods --all-namespaces | grep -v -E 'Running|Completed'
-          kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -n 40
-          tail -n 200 .logs/lab.log
