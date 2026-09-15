@@ -76,6 +76,12 @@ The services' Applications sync with `PruneLast=true`. An object a change replac
 
 The price comes with a broken replacement. The old object keeps serving, but the sync waits for the replacement to fail, up to ten minutes for a Deployment, and no other sync of that service starts until then, or until someone terminates the one that's waiting.
 
+### Argo Rollouts moves a canary's traffic on the service's route
+
+Argo Rollouts runs canaries: the new version starts beside the old one and takes a growing share of the requests, until it takes them all or an analysis sends them back. It moves that share on the service's HTTPRoute, through the Gateway API plugin, rather than through Rollouts' own Traefik support, which would put a TraefikService, a kind only Traefik reads, between the route and the service. The controller holds the permissions the plugin needs on routes, and none of those the chart grants by default for nine other traffic providers.
+
+The plugin reaches the controller through an init container that copies it out of the plugin's own image, pinned by digest. The other documented way, a URL in the controller's ConfigMap, names one architecture and has every start of the controller download a 78 MB binary from GitHub, and a controller that can't load its plugin doesn't start. The image is built for amd64 and arm64, is a 19 MB pull, and stays on the node.
+
 ### The platform provides the Dockerfile, one per language
 
 `build/go.Dockerfile` is the one for Go. Services don't carry build details, and a base image or compiler update reaches all of them at once. A service with special needs can still pass its own.
