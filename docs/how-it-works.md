@@ -37,7 +37,7 @@ database:
   size: medium
 ```
 
-`bucket:` asks the platform for an S3 bucket; the service gets its name and credentials as `BUCKET_NAME` and `AWS_*` environment variables. `database:` asks for a Postgres database; the service gets its address and credentials as `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` and `DATABASE_URL`, the variables any Postgres client already reads. hello's page shows whether it reaches each of them. Stages are branches: `staging` deploys to staging, `main` to production. The service's CI is two calls to workflows the platform provides in this repository: `go.yaml` checks a Go service (formatting, `go vet`, tests), and `delivery.yaml` does the rest, the same for every service.
+`bucket:` asks the platform for an S3 bucket; the service gets its name and credentials as `BUCKET_NAME` and `AWS_*` environment variables. `database:` asks for a Postgres database; the service gets its address and credentials as `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` and `DATABASE_URL`, the variables any Postgres client already reads. hello's page shows whether it reaches each of them. Stages are branches: `staging` deploys to staging, `main` to production. The service's CI is two calls to workflows the platform provides in this repository: `service-go.yaml` checks a Go service (formatting, `go vet`, tests), and `service-delivery.yaml` does the rest, the same for every service.
 
 Before any of that, a pull request gets checked: the delivery workflow renders `charts/hello/` with the platform's chart for each stage, so a typo or a size the platform doesn't offer fails in the pull request, with the chart's own message.
 
@@ -91,10 +91,10 @@ An ApplicationSet reads `charts/*/values.yaml` from each service's repository, o
 
 ### The workflows services call
 
-`.github/workflows/` holds reusable workflows, the GitHub Actions counterpart of CircleCI orbs. A service's CI is little more than two calls:
+`.github/workflows/` holds reusable workflows, the GitHub Actions counterpart of CircleCI orbs. GitHub calls them from that folder only, which this repository's own CI shares, so the ones services call are named `service-*.yaml`. A service's CI is little more than two calls:
 
-- `go.yaml` checks a Go service: formatting, `go vet` and the tests, with the Go version from its `go.mod`. Services in other languages would get their own.
-- `delivery.yaml` takes the service's folder name and ships it, the same way for every service: validation on pull requests, build and deploy on `staging`, promotion on `main`. It builds the image with the platform's Dockerfile for the service's language, `build/go.Dockerfile` by default; a service with special needs can pass its own.
+- `service-go.yaml` checks a Go service: formatting, `go vet` and the tests, with the Go version from its `go.mod`. Services in other languages would get their own.
+- `service-delivery.yaml` takes the service's folder name and ships it, the same way for every service: validation on pull requests, build and deploy on `staging`, promotion on `main`. It builds the image with the platform's Dockerfile for the service's language, `build/go.Dockerfile` by default; a service with special needs can pass its own.
 
 Services call them at `main`, so a fix reaches all of them at once.
 

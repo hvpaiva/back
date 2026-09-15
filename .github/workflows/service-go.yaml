@@ -1,6 +1,5 @@
-# Services called this before service-go.yaml; it goes once none of them does.
 # Checks for Go services, with the Go version from the service's go.mod.
-name: go
+name: service-go
 
 on:
   workflow_call: {}

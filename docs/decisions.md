@@ -52,7 +52,7 @@ CI is done once it commits the image; Argo CD tells GitHub when that version is 
 
 ### The platform maintains the services' CI too
 
-It provides checks per language (`go.yaml` for now) and one delivery workflow for all. Services call them at `main`, the same trade-off as the chart: a fix reaches every service at once, and so does a mistake. A service that needs stability can pin a commit instead.
+It provides checks per language (`service-go.yaml` for now) and one delivery workflow for all, `service-delivery.yaml`. Services call them at `main`, the same trade-off as the chart: a fix reaches every service at once, and so does a mistake. A service that needs stability can pin a commit instead. They share `.github/workflows/` with the platform's own CI, since GitHub calls a reusable workflow from no other folder, so their names carry the difference: `service-*.yaml` is what services call, `ci.yaml` what checks the platform. A repository of their own would separate them further, at the cost of a third repository to fork, and of a change to the chart and the pipeline that validates it landing in two places.
 
 ### One ApplicationSet for every service
 

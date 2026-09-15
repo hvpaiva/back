@@ -1,8 +1,7 @@
-# Services called this before service-delivery.yaml; it goes once none of them does.
 # Delivery for services: validates charts/<service>/ on pull requests, builds and
 # deploys on staging, promotes on main. Deploying is a commit to the stage's values
 # file; Argo CD does the rest. Callers grant `contents: write` and `packages: write`.
-name: delivery
+name: service-delivery
 
 on:
   workflow_call:

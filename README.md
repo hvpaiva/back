@@ -117,7 +117,7 @@ In this repository:
 
 - `cluster/` is the base layer, what an infrastructure team would hand over: a cluster, an ingress controller and a cloud account (MiniStack, standing in for AWS). `just` installs it.
 - `platform/` is everything Argo CD delivers. `platform/root.yaml`, applied by hand once with the projects, delivers `platform/apps/`: Argo CD itself, Headlamp, Crossplane, CloudNativePG with its backup plugin and the cert-manager that plugin needs, the cluster's RBAC, the platform's APIs, the projects and the services' ApplicationSet. `platform/crossplane/` holds Crossplane's packages, its permissions and its connection to the cloud account, and `platform/crossview/` the read access the UI over it runs with; `platform/apis/` holds the APIs services request resources through, each with the example request `just render` and `kubectl apply` take; `platform/rbac/` says what each team can see.
-- `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls, `go.yaml` to check Go services and `delivery.yaml` to validate and ship any service, and `ci.yaml`, which checks the platform itself.
+- `charts/app/` is the golden path for services, and `build/` has the Dockerfiles their images are built with. `.github/workflows/` holds the workflows services' CI calls, `service-go.yaml` to check Go services and `service-delivery.yaml` to validate and ship any service, and `ci.yaml`, which checks the platform itself.
 - `tests/` holds what `just test` checks the platform against: situations for the APIs to render in, services for the chart, and objects for Argo CD's health checks.
 - `scripts/` holds what the longer `just` recipes run.
 

@@ -192,7 +192,7 @@ Two settings in the notification template are easy to get wrong. A service's App
 
 ### A reusable workflow has the caller's permissions
 
-The delivery workflow pushes commits and images, but it can't grant itself permission to: it runs with the token of the service's CI, limited to what the calling job allows. Every service's CI has to grant `contents: write` and `packages: write` to the job that calls `delivery.yaml`.
+The delivery workflow pushes commits and images, but it can't grant itself permission to: it runs with the token of the service's CI, limited to what the calling job allows. Every service's CI has to grant `contents: write` and `packages: write` to the job that calls `service-delivery.yaml`.
 
 ### A failing check doesn't block anything on its own
 
