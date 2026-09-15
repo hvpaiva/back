@@ -1,0 +1,13 @@
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-s3
+status:
+  conditions:
+    - type: Installed
+      status: "True"
+      reason: ActivePackageRevision
+    - type: Healthy
+      status: "False"
+      reason: UnhealthyPackageRevision
+      message: "post establish runtime hook failed for package: provider package deployment has no condition of type \"Available\" yet"

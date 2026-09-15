@@ -78,6 +78,10 @@ render api *flags: docker-ready
 render-service path="../back-hello/charts/hello":
     @scripts/render-service.sh {{path}}
 
+# Check everything this repository defines, as CI does: scripts, health, apis, services and platform, or only the areas named
+test *areas:
+    @scripts/test.sh {{areas}}
+
 # Show what this working copy would change in one Application, without applying it
 diff app:
     @scripts/local.sh diff {{app}}

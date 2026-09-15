@@ -1,0 +1,13 @@
+apiVersion: back.lab/v1alpha1
+kind: Bucket
+metadata:
+  name: reports
+  namespace: hello-staging
+status:
+  conditions:
+    - type: Synced
+      status: "True"
+      reason: ReconcileSuccess
+    - type: Ready
+      status: "True"
+      reason: Available

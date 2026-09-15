@@ -1,0 +1,5 @@
+apiVersion: back.lab/v1alpha1
+kind: Queue
+metadata:
+  name: emails
+  namespace: hello-staging

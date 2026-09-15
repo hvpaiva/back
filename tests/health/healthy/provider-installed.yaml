@@ -1,0 +1,12 @@
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-s3
+status:
+  conditions:
+    - type: Installed
+      status: "True"
+      reason: ActivePackageRevision
+    - type: Healthy
+      status: "True"
+      reason: HealthyPackageRevision

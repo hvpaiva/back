@@ -1,0 +1,9 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hello-staging
+  namespace: argocd
+status:
+  health:
+    status: Degraded
+    message: Deployment "hello" exceeded its progress deadline

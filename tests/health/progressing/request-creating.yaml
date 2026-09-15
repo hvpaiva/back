@@ -1,0 +1,14 @@
+apiVersion: back.lab/v1alpha1
+kind: Database
+metadata:
+  name: orders
+  namespace: hello-staging
+status:
+  conditions:
+    - type: Synced
+      status: "True"
+      reason: ReconcileSuccess
+    - type: Ready
+      status: "False"
+      reason: Creating
+      message: "Unready resources: postgres"

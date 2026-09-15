@@ -1,0 +1,6 @@
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: ManagedResourceDefinition
+metadata:
+  name: bucketlifecycleconfigurations.s3.aws.m.upbound.io
+spec:
+  state: Inactive

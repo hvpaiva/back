@@ -1,0 +1,14 @@
+apiVersion: back.lab/v1alpha1
+kind: Cache
+metadata:
+  name: sessions
+  namespace: hello-staging
+status:
+  conditions:
+    - type: Synced
+      status: "False"
+      reason: ReconcileError
+      message: "cannot compose resources: cannot render composed resource \"server\""
+    - type: Ready
+      status: "False"
+      reason: Creating

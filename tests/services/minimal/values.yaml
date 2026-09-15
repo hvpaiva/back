@@ -1,0 +1,4 @@
+application:
+  name: minimal
+  team: team-a
+image: ghcr.io/example/minimal:sha-0000000

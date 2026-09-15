@@ -1,0 +1,11 @@
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: ManagedResourceDefinition
+metadata:
+  name: buckets.s3.aws.m.upbound.io
+spec:
+  state: Active
+status:
+  conditions:
+    - type: Established
+      status: "True"
+      reason: Established
