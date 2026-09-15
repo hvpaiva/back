@@ -58,6 +58,12 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{ .application.name }}-{{ .stage }}'
+      # Argo Rollouts owns the route's weights.
+      ignoreDifferences:
+        - group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          jqPathExpressions:
+            - .spec.rules[].backendRefs[].weight
       syncPolicy:
         automated:
           prune: true
@@ -66,3 +72,5 @@ spec:
           - CreateNamespace=true
           # What a sync replaces goes only once its replacement is healthy, so a service changing front doors keeps answering.
           - PruneLast=true
+          # Keeps a canary's weights when a sync changes something else.
+          - ApplyOutOfSyncOnly=true
