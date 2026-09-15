@@ -1,15 +1,5 @@
 #!/usr/bin/env bash
-# Renders one of the platform's APIs against the example request next to it, or in one of its scenarios
-# under tests/apis/, and checks the result against the schemas it has to satisfy (just render <api>
-# [scenario]). No cluster: Docker runs the functions, and the schemas are downloaded once. With the lab
-# running, the CRD Crossplane makes of the XRD is also put to the API server as a dry run. Everything but
-# the manifests goes to stderr, and the manifests only once they pass, so `just render bucket > out.yaml`
-# never writes a rejected render.
-#
-#   scripts/render.sh bucket                     what the Composition would create
-#   scripts/render.sh database backed-up         ... in one of its scenarios, from tests/apis/database/
-#   scripts/render.sh cache -o observed.yaml     ... given resources that already exist
-#   scripts/render.sh database -e secret.yaml    ... given resources it reads from the cluster
+# Renders an API against its example request or a scenario in tests/apis/, and checks the result against its schemas (just render).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
@@ -60,22 +50,20 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 rendered=$work/rendered.yaml
 
-# --include-full-xr keeps the request's own spec in the output, which the XRD's rules are checked against.
+# Without --include-full-xr the request's spec leaves the output, and its XRD's rules go unchecked.
 crossplane composition render "$request" "$dir/composition.yaml" platform/crossplane/functions.yaml \
   --xrd "$dir/definition.yaml" --include-full-xr --crossplane-image "$engine" "${given[@]}" "$@" >"$rendered"
 {
   section "What $title renders"
-  # Two kinds can share a name here: the request's own, and the provider's it composes.
   awk '/^apiVersion: / { split($2, v, "/"); group = v[1] }
        /^kind: / { kind = $2 }
        /^  name: / && kind != "" { printf "  %-37s %s\n", group "/" kind, $2; kind = "" }' "$rendered"
 
   section "Checking $title against the schemas it has to satisfy"
-  # What render adds of its own with -c and -r, the context and the results, has no schema.
+  # Render's own context and results (-c, -r) have no schema.
   awk 'function keep() { if (doc != "" && doc !~ /(^|\n)apiVersion: render\.crossplane\.io\//) printf "---\n%s", doc; doc = "" }
        /^---$/ { keep(); next } { doc = doc $0 "\n" } END { keep() }' "$rendered" >"$work/resources.yaml"
   schemas_for "$work/resources.yaml" "$work/schemas"
-  # Only what isn't fine, plus the totals; a schema it doesn't satisfy is the answer, not a crash.
   status=0
   validate "$work/schemas" "$work/resources.yaml" | tee "$work/validation" | sed 's/^/  /' || status=$?
   if grep -q '^\[!\] could not find' "$work/validation"; then
