@@ -118,6 +118,30 @@ prometheus() {
   echo "v$version, reads Traefik's metrics, http://prometheus.localhost"
 }
 
+# The controller exits before taking its lease when a plugin doesn't load, so a ready pod holding a live lease runs with them.
+rollouts() {
+  local version plugins lease holder age duration
+  version=$(kubectl --namespace argo-rollouts get deployment argo-rollouts \
+    --output jsonpath='{.spec.template.spec.containers[0].image}') || return
+  plugins=$(kubectl --namespace argo-rollouts get configmap argo-rollouts-config \
+    --output jsonpath='{.data.trafficRouterPlugins}' | yq '(. // []) | map(.name) | join(", ")') || return
+  lease=$(kubectl --namespace argo-rollouts get lease argo-rollouts-controller-lock --output json | jq -r '
+    [(.spec.holderIdentity // "-" | split("_")[0]),
+     (now - (.spec.renewTime | sub("\\.[0-9]+"; "") | fromdateiso8601) | floor),
+     .spec.leaseDurationSeconds] | join(" ")') || return
+  read -r holder age duration <<<"$lease"
+  if ((age > duration)) || [[ $(kubectl --namespace argo-rollouts get pod "$holder" \
+    --output jsonpath='{.status.containerStatuses[0].ready}' 2>/dev/null) != true ]]; then
+    echo "no running controller holds its lease: kubectl --namespace argo-rollouts get pods"
+    return 1
+  fi
+  if [[ -z $plugins ]]; then
+    echo "${version##*:} loads no traffic router plugin, so no canary can move traffic on a route"
+    return 1
+  fi
+  echo "${version##*:}, moves traffic with $plugins (kubectl argo rollouts list rollouts --all-namespaces)"
+}
+
 crossplane_packages() {
   kubectl get providers.pkg.crossplane.io,functions.pkg.crossplane.io --output json | jq -er '.items
     | if length > 0 and all(any(.status.conditions[]?; .type == "Healthy" and .status == "True"))
@@ -197,6 +221,7 @@ report crossplane crossplane_packages
 report reloader reloader
 report kyverno kyverno
 report prometheus prometheus
+report rollouts rollouts
 scripts/identities.sh check || problems=$((problems + 1))
 report hello hello staging http://hello.staging.localhost
 report hello hello production http://hello.localhost
