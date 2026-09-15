@@ -101,6 +101,23 @@ kyverno() {
   echo "${version##*:}, $policies policies in force"
 }
 
+# Its page answers whether or not it reads anything, so ask for Traefik's target.
+prometheus() {
+  local version target
+  version=$(web http://prometheus.localhost/api/v1/status/buildinfo | jq -er '.data.version') || return
+  target=$(web 'http://prometheus.localhost/api/v1/targets?state=active' |
+    jq -c 'first(.data.activeTargets[] | select(.labels.namespace == "traefik")) // empty') || return
+  if [[ -z $target ]]; then
+    echo "has no target in the traefik namespace: platform/prometheus/traefik.yaml says what it reads"
+    return 1
+  fi
+  if [[ $(jq -r '.health' <<<"$target") != up ]]; then
+    echo "can't read Traefik's metrics: $(jq -r '.lastError' <<<"$target")"
+    return 1
+  fi
+  echo "v$version, reads Traefik's metrics, http://prometheus.localhost"
+}
+
 crossplane_packages() {
   kubectl get providers.pkg.crossplane.io,functions.pkg.crossplane.io --output json | jq -er '.items
     | if length > 0 and all(any(.status.conditions[]?; .type == "Healthy" and .status == "True"))
@@ -179,6 +196,7 @@ report stackport stackport
 report crossplane crossplane_packages
 report reloader reloader
 report kyverno kyverno
+report prometheus prometheus
 scripts/identities.sh check || problems=$((problems + 1))
 report hello hello staging http://hello.staging.localhost
 report hello hello production http://hello.localhost
