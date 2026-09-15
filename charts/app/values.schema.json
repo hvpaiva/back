@@ -41,6 +41,11 @@
       "type": ["object", "null"],
       "additionalProperties": false,
       "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z]([a-z0-9-]{0,40}[a-z0-9])?$",
+          "description": "What to call the bucket: lowercase letters, digits and dashes."
+        },
         "versioning": { "type": "boolean" }
       }
     },
@@ -48,6 +53,11 @@
       "type": ["object", "null"],
       "additionalProperties": false,
       "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z]([a-z0-9-]{0,40}[a-z0-9])?$",
+          "description": "What to call the database: lowercase letters, digits and dashes."
+        },
         "size": { "enum": ["small", "medium", "large"] },
         "restore": {
           "type": "object",

@@ -45,8 +45,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-            # What the service asked for, as the platform resolved it. A service
-            # can show these, so editing its values.yaml is visible from outside.
+            # What the service asked for, as the platform resolved it: a service can show it, so a values change is visible.
             - name: APP_SIZE
               value: {{ .Values.size | quote }}
             - name: APP_REPLICAS
@@ -71,11 +70,11 @@ spec:
           envFrom:
             {{- if kindIs "map" .Values.bucket }}
             - secretRef:
-                name: {{ .Values.application.name }}-bucket
+                name: {{ include "app.connection" (dict "kind" "bucket" "name" (.Values.bucket.name | default "bucket")) }}
             {{- end }}
             {{- if kindIs "map" .Values.database }}
             - secretRef:
-                name: {{ .Values.application.name }}-database
+                name: {{ include "app.connection" (dict "kind" "database" "name" (.Values.database.name | default "database")) }}
             {{- end }}
           {{- end }}
           readinessProbe:

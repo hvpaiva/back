@@ -2,7 +2,7 @@
 apiVersion: back.lab/v1alpha1
 kind: Bucket
 metadata:
-  name: {{ .Values.application.name }}
+  name: {{ .Values.bucket.name | default "bucket" }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
   annotations:

@@ -21,10 +21,12 @@ size: small
 public: false
 
 # An S3 bucket: `{}`, or `versioning: true` to keep every version of each object.
+# `name:` names it, `bucket` if not set; in the cloud account it's <application>-<stage>-<name>.
 # Its name and credentials reach the service as BUCKET_NAME and AWS_* variables.
 bucket: null
 
 # A Postgres database: `{}`, or `size: medium` or `large` for more instances and memory.
+# `name:` names it, `database` if not set.
 # Its address and credentials reach the service as PG* variables and DATABASE_URL.
 # `restore: {}` creates it from its own backups instead of empty, and `at:` a time goes back to then.
 database: null

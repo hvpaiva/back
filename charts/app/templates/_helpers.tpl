@@ -26,3 +26,8 @@ back.lab/stage: {{ .Values.platform.stage }}
 {{- define "app.selector" -}}
 app.kubernetes.io/name: {{ .Values.application.name }}
 {{- end -}}
+
+{{/* The Secret a request's connection lands in: <name>-<kind>, or just <kind> when that's the request's name. */}}
+{{- define "app.connection" -}}
+{{- if eq .name .kind -}}{{ .kind }}{{- else -}}{{ .name }}-{{ .kind }}{{- end -}}
+{{- end -}}

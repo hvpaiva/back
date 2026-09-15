@@ -1,8 +1,9 @@
 {{- if kindIs "map" .Values.database }}
+{{- $name := .Values.database.name | default "database" }}
 apiVersion: back.lab/v1alpha1
 kind: Database
 metadata:
-  name: {{ .Values.application.name }}
+  name: {{ $name }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
   annotations:
@@ -18,7 +19,7 @@ spec:
 apiVersion: protection.crossplane.io/v1beta1
 kind: Usage
 metadata:
-  name: {{ .Values.application.name }}-database
+  name: {{ $name }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
   annotations:
@@ -28,6 +29,6 @@ spec:
     apiVersion: back.lab/v1alpha1
     kind: Database
     resourceRef:
-      name: {{ .Values.application.name }}
+      name: {{ $name }}
   reason: holds {{ .Values.application.name }}'s data; delete this Usage first to delete the database on purpose
 {{- end }}
