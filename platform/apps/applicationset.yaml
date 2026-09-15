@@ -23,7 +23,7 @@ spec:
                 - repo: https://github.com/hvpaiva/back-hello.git
                   stage: production
                   branch: main
-                  route: ingress
+                  route: gateway
           - git:
               repoURL: '{{ .repo }}'
               revision: '{{ .branch }}'
