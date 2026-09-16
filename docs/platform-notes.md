@@ -124,6 +124,20 @@ With `PruneLast=true`, a sync deletes what it replaces only after everything it 
 
 Argo Rollouts keeps a service's two Services pointed at the right pods by adding a label of those pods to each selector. Argo CD never applied that label, so it leaves it there. Replacing the Rollout with a Deployment again keeps the stable Service selecting the Rollout's pods, and with `PruneLast=true` the Rollout and its pods are the last thing the sync removes. Moving a service that way lost 242 of 13,807 requests, all within two seconds, until the Service selected the Deployment's pods about a second after the Rollout was gone. Moving it to the Rollout lost none: Argo Rollouts took over the selector only once its own pods were ready.
 
+### A check can only see what Prometheus scraped twice
+
+A canary's check reads a rate, and a rate needs two samples of the same counter. Prometheus reads Traefik every ten seconds, so a backend that starts failing stays invisible for the first twenty or so, and the check's first readings come back empty. Prometheus' own default is thirty seconds, and with it a canary of about a minute can end before the check ever has a number to judge, which is why `platform/prometheus/traefik.yaml` asks for ten.
+
+Measured on hello under about a hundred requests a second, with a version told to answer 500: the first reading came back empty, and the second, twenty-one seconds after the canary took its first fifth, read every request to it as a server error. Argo Rollouts aborted the rollout, took the weights back to 100 and 0, and left the Rollout *Degraded* with the metric named in its message. The requests that paid for it: 368 of 20,193, all 500, in a window of eighteen seconds.
+
+### A canary with no pod gets no requests
+
+Killing the canary's only pod under load costs nothing: Argo Rollouts takes its weight back to zero as soon as it has no ready replica and restores it when the replacement is ready. On hello the weights went from 80 and 20 to 100 and 0 within a second of the pod being deleted, back to 80 and 20 five seconds later, and none of 19,483 requests failed. So a version that crashes is caught by its pods and not by the check, which is there for the version that stays up and answers wrongly.
+
+### A check that can't answer lets a canary through
+
+Pointed at a port nothing listens on, the check recorded one measurement of `Error` carrying what Prometheus never sent (`context deadline exceeded`), the canary finished its steps on time, and the run ended *Successful*. Argo Rollouts gives up on a metric after four errors in a row, which takes longer than a canary of this length. A canary nobody calls reads the same way, empty every time, and also goes through: what the platform can't measure it doesn't hold against a version.
+
 ### Argo CD has permissions of its own
 
 Argo CD reads the cluster with its own ServiceAccount and decides what each user sees with its own RBAC, per Application rather than per resource: whoever can see an Application sees every resource in its tree. For `dev`, that's what kubectl's `view` shows in its services' namespaces, plus the Secrets' metadata and key names, which kubectl hides; the values are masked (`++++++++`). Argo CD only masks the `data` and `stringData` of Secrets, though. A password in a ConfigMap, or in a custom resource's spec or status, would show in full, which is why the platform's APIs hand out credentials in Secrets only. The two systems also drift apart as teams arrive: every developer sees every service in the `apps` project, logs included, while kubectl keeps each team to its own namespaces. A project per team would keep them aligned.

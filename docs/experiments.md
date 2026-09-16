@@ -132,6 +132,33 @@ kubectl -n hello-staging patch secret bucket --type json -p '[{"op":"remove","pa
 
 Reloader watches the namespaces the platform names for it, in `platform/apps/reloader.yaml`, and `just check` says which those are.
 
+### Stop a bad version
+
+A canary is judged while it runs: the platform asks Prometheus how the requests to the new version came back ([how](decisions.md#a-canary-is-judged-by-the-requests-it-fails)). What it catches is a version that is up and wrong, so hello answers 500 to everything but its health check when `FAIL_REQUESTS` is in its environment. The platform hands a service its environment through Secrets, so one key both starts a canary and makes the version it ships the broken one.
+
+Ask the service as fast as it answers, in one terminal:
+
+```sh
+while true; do curl -s -o /dev/null -w '%{http_code} ' http://hello.staging.localhost/api/info; done
+```
+
+And in another:
+
+```sh
+kubectl -n hello-staging patch secret bucket --type merge -p '{"stringData":{"FAIL_REQUESTS":"true"}}'
+kubectl argo rollouts get rollout hello --namespace hello-staging --watch
+```
+
+A pod starts with that key in its environment, passes its probes and takes a fifth of the requests, which come back `500` while the rest stay `200`. About twenty seconds later the check has read them twice and Argo Rollouts aborts: every request goes back to the version that was already running, the Rollout turns *Degraded* with the metric named in its message, and the Application reads *Synced* and *Degraded*, since nothing in Git changed. http://rollouts.localhost/rollouts/rollout/hello-staging/hello shows the analysis beside the steps. Stopping the version costs a few hundred requests ([measured](platform-notes.md#a-check-can-only-see-what-prometheus-scraped-twice)).
+
+Take the key out, and the canary that follows carries a version that answers again, which puts the Application back to *Healthy*:
+
+```sh
+kubectl -n hello-staging patch secret bucket --type json -p '[{"op":"remove","path":"/data/FAIL_REQUESTS"}]'
+```
+
+Leave it in and every canary after it fails the same way, since each new pod reads it.
+
 ### Look at it as a developer
 
 ```sh

@@ -90,6 +90,14 @@ The chart renders a Rollout instead of a Deployment. Anything that changes the p
 
 A service moved to the Rollout without losing a request, and going back to a Deployment drops some ([measured](platform-notes.md#going-back-from-a-rollout-to-a-deployment-drops-requests)).
 
+### A canary is judged by the requests it fails
+
+While the canary takes its share, Argo Rollouts asks Prometheus how those requests came back, and sends every request to the old version if more than one in twenty is a server error. The question is a `ClusterAnalysisTemplate` the platform owns: every service is judged the same way, nothing about it reaches a service's values, and the backend to look at is an argument, so the same question can be asked of a whole stage later.
+
+The numbers come from Traefik, which already counts what it serves by backend and status code, so no service has to expose anything to have its canary judged. They exist only for a service on a route: on an Ingress a canary adds pods instead of moving requests, and Traefik counts one backend for both versions.
+
+Two rules keep a deploy from stopping on nothing. A backend under half a request a second isn't judged, because one error out of three requests says nothing about a version, so a canary nobody calls goes through. And if Prometheus can't answer, the canary goes through too, with the error kept in the run: a check the platform can't make doesn't hold a version back ([measured](platform-notes.md#a-check-that-cant-answer-lets-a-canary-through)).
+
 ### The route's weights belong to Argo Rollouts
 
 The services' Applications leave the route's weights out of what they compare, so a canary moving them doesn't turn an Application *OutOfSync*. A sync still writes the route as the chart renders it, though, and `RespectIgnoreDifferences`, the option meant to keep an ignored field's live value, doesn't keep these ([measured](platform-notes.md#a-sync-in-the-middle-of-a-canary-rewrites-the-routes-weights)). So the chart renders them as 100 for the stable version and 0 for the canary, and a rewrite sends every request to the stable version instead of half of them to the canary. The Applications also sync with `ApplyOutOfSyncOnly=true`, so a sync that changes something else doesn't rewrite the route at all.

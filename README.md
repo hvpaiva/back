@@ -66,7 +66,7 @@ Inside this directory, `mise.toml` points kubectl, helm and the argocd CLI at th
 | Crossview | http://crossview.localhost (the requests, what each composed, and the providers behind them) |
 | hello | http://hello.staging.localhost and http://hello.localhost |
 | Traefik | http://traefik.localhost/dashboard/ |
-| Prometheus | http://prometheus.localhost (the requests Traefik served, by service and status code) |
+| Prometheus | http://prometheus.localhost (the requests Traefik served, by service and status code, which is also what judges a canary) |
 | The cloud account | http://stackport.localhost (what the platform created in it), or `aws s3 ls` from this directory |
 | Crossplane | Crossview, above, or `kubectl get providers,functions` |
 

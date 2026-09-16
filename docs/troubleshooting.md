@@ -13,6 +13,7 @@ Almost everything that breaks here breaks at a handoff between two tools, and ea
 | The service starts but can't reach what it asked for | [the request](#the-request), then [the cloud account](#the-cloud-account) |
 | The page doesn't answer at all | [the service](#the-service) |
 | The Application reads *Suspended* for a minute after a push | [the service](#the-service) |
+| The Application turns *Degraded* right after a new version | [the service](#the-service) |
 | `just up` stops at `kind create cluster` | [the cluster](#the-cluster-wont-come-up) |
 | A check fails on GitHub | [CI](#ci) |
 
@@ -106,6 +107,8 @@ kubectl -n hello-staging get events --sort-by=.lastTimestamp | tail
 ```
 
 A service runs as a Rollout, which `kubectl logs` can't take by name, hence the label. For about a minute after a new version, its Application reads *Suspended* while the canary waits between steps; http://rollouts.localhost shows which step it's on and how the requests are split.
+
+*Degraded* right after a new version, with the old one still answering, means the canary was stopped by its check. `kubectl argo rollouts get rollout hello --namespace hello-staging` names the metric that failed, and the Rollout repeats it in its message. Nothing retries that version on its own, since Git still asks for it; going back to the one before puts the Rollout on *Healthy* at once, with no canary to run, because that version is the one already serving. [Stopping a version on purpose](experiments.md#stop-a-bad-version) walks the whole thing.
 
 A pod in `CreateContainerConfigError` is missing a Secret it reads its environment from, and `kubectl describe pod` names that Secret (`secret "bucket" not found`). The request that composes the Secret either doesn't exist or hasn't composed it yet, and the pod starts on its own once the Secret is there. `ImagePullBackOff` on a fork means the package GitHub created is private.
 
