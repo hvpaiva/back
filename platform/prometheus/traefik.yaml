@@ -12,3 +12,5 @@ spec:
       app.kubernetes.io/name: traefik
   podMetricsEndpoints:
     - port: metrics
+      # A canary lasts about a minute, and the check that judges it needs two readings before it says anything.
+      interval: 10s
