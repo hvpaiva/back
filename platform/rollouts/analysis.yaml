@@ -1,0 +1,24 @@
+# What a canary has to pass: the share of server errors on its own backend, counted by Traefik.
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterAnalysisTemplate
+metadata:
+  name: requests-succeed
+spec:
+  args:
+    - name: namespace
+    - name: service
+    # The rate under which a backend is left alone: one error out of three requests says nothing about a version.
+    - name: quiet-below
+      value: "0.5"
+  metrics:
+    - name: server-errors
+      interval: 20s
+      # Nothing to read means too little traffic to judge, which passes; the zero below keeps a canary with no errors from reading the same way.
+      successCondition: len(result) == 0 || result[0] <= 0.05
+      provider:
+        prometheus:
+          address: http://prometheus-prometheus.prometheus.svc:9090
+          query: |
+            (sum(rate(traefik_service_requests_total{service=~".*-svc-{{args.namespace}}-{{args.service}}-[0-9]+@kubernetesgateway", code=~"5.."}[1m])) or vector(0))
+            /
+            (sum(rate(traefik_service_requests_total{service=~".*-svc-{{args.namespace}}-{{args.service}}-[0-9]+@kubernetesgateway"}[1m])) > {{args.quiet-below}})

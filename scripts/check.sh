@@ -120,7 +120,7 @@ prometheus() {
 
 # A controller that can't load a plugin exits before taking the lease.
 rollouts() {
-  local version plugins lease holder age duration
+  local version plugins lease holder age duration analysis template query
   version=$(kubectl --namespace argo-rollouts get deployment argo-rollouts \
     --output jsonpath='{.spec.template.spec.containers[0].image}') || return
   plugins=$(kubectl --namespace argo-rollouts get configmap argo-rollouts-config \
@@ -143,7 +143,22 @@ rollouts() {
     echo "its dashboard can't list Rollouts: kubectl --namespace argo-rollouts logs deployment/argo-rollouts-dashboard"
     return 1
   fi
-  echo "${version##*:}, moves traffic with $plugins, http://rollouts.localhost"
+  analysis=$(kubectl get clusteranalysistemplate --output jsonpath='{.items[*].metadata.name}') || return
+  if [[ -z $analysis ]]; then
+    echo "has no analysis template, so nothing stops a canary whose requests fail: platform/rollouts/"
+    return 1
+  fi
+  for template in $analysis; do
+    # A query is read only while a canary runs, so ask Prometheus to parse it with the arguments filled in.
+    query=$(kubectl get clusteranalysistemplate "$template" \
+      --output jsonpath='{.spec.metrics[0].provider.prometheus.query}' | sed 's/{{args\.[a-z-]*}}/1/g')
+    if ! web --get --data-urlencode "query=$query" http://prometheus.localhost/api/v1/query |
+      jq -e '.status == "success"' >/dev/null; then
+      echo "$template asks Prometheus something it can't answer: kubectl get clusteranalysistemplate $template --output yaml"
+      return 1
+    fi
+  done
+  echo "${version##*:}, moves traffic with $plugins, judges canaries with ${analysis// /, }, http://rollouts.localhost"
 }
 
 crossplane_packages() {

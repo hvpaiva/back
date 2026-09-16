@@ -8,57 +8,60 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
 spec:
   project: platform
-  source:
-    repoURL: https://argoproj.github.io/argo-helm
-    chart: argo-rollouts
-    targetRevision: 2.43.1
-    helm:
-      valuesObject:
-        controller:
-          replicas: 1
-          # Copied from the plugin's image instead of downloaded at every start.
-          initContainers:
-            - name: gatewayapi-plugin
-              image: ghcr.io/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi:v0.17.0@sha256:bc40d5edf13307e455f6c18cbf9cc79715165cbee8b05a674fd88119f119d4a2
-              command: [cp, /bin/rollouts-plugin-trafficrouter-gatewayapi, /plugins/]
-              volumeMounts:
-                - name: gatewayapi-plugin
-                  mountPath: /plugins
-              securityContext:
-                allowPrivilegeEscalation: false
-                capabilities:
-                  drop: [ALL]
-                readOnlyRootFilesystem: true
-                seccompProfile:
-                  type: RuntimeDefault
-          volumes:
-            - name: gatewayapi-plugin
-              emptyDir: {}
-          volumeMounts:
-            - name: gatewayapi-plugin
-              mountPath: /plugins
-          trafficRouterPlugins:
-            - name: argoproj-labs/gatewayAPI
-              location: file:///plugins/rollouts-plugin-trafficrouter-gatewayapi
-        providerRBAC:
-          providers:
-            istio: false
-            smi: false
-            ambassador: false
-            awsLoadBalancerController: false
-            awsAppMesh: false
-            traefik: false
-            apisix: false
-            contour: false
-            glooPlatform: false
-        dashboard:
-          enabled: true
-          readonly: true
-          ingress:
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-rollouts
+      targetRevision: 2.43.1
+      helm:
+        valuesObject:
+          controller:
+            replicas: 1
+            # Copied from the plugin's image instead of downloaded at every start.
+            initContainers:
+              - name: gatewayapi-plugin
+                image: ghcr.io/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi:v0.17.0@sha256:bc40d5edf13307e455f6c18cbf9cc79715165cbee8b05a674fd88119f119d4a2
+                command: [cp, /bin/rollouts-plugin-trafficrouter-gatewayapi, /plugins/]
+                volumeMounts:
+                  - name: gatewayapi-plugin
+                    mountPath: /plugins
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: [ALL]
+                  readOnlyRootFilesystem: true
+                  seccompProfile:
+                    type: RuntimeDefault
+            volumes:
+              - name: gatewayapi-plugin
+                emptyDir: {}
+            volumeMounts:
+              - name: gatewayapi-plugin
+                mountPath: /plugins
+            trafficRouterPlugins:
+              - name: argoproj-labs/gatewayAPI
+                location: file:///plugins/rollouts-plugin-trafficrouter-gatewayapi
+          providerRBAC:
+            providers:
+              istio: false
+              smi: false
+              ambassador: false
+              awsLoadBalancerController: false
+              awsAppMesh: false
+              traefik: false
+              apisix: false
+              contour: false
+              glooPlatform: false
+          dashboard:
             enabled: true
-            ingressClassName: traefik
-            hosts:
-              - rollouts.localhost
+            readonly: true
+            ingress:
+              enabled: true
+              ingressClassName: traefik
+              hosts:
+                - rollouts.localhost
+    - repoURL: https://github.com/hvpaiva/back.git
+      targetRevision: main
+      path: platform/rollouts
   destination:
     server: https://kubernetes.default.svc
     namespace: argo-rollouts
