@@ -21,6 +21,16 @@ spec:
         plugins:
           argoproj-labs/gatewayAPI:
             httpRoute: {{ .Values.application.name }}
+      analysis:
+        templates:
+          - templateName: requests-succeed
+            clusterScope: true
+        startingStep: 1
+        args:
+          - name: namespace
+            value: {{ .Release.Namespace }}
+          - name: service
+            value: {{ .Values.application.name }}-canary
       {{- end }}
       steps:
         - setWeight: 20
