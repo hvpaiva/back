@@ -159,6 +159,14 @@ kubectl -n hello-staging patch secret bucket --type json -p '[{"op":"remove","pa
 
 Leave it in and every canary after it fails the same way, since each new pod reads it.
 
+Waiting for the check isn't the only way to stop one. As the developer (`just argocd-login dev`), aborting is a command, retrying runs the same version through the canary again, and skipping the steps is refused with `permission denied`, because that one belongs to the platform ([why](decisions.md#stopping-a-canary-is-the-teams-skipping-it-is-the-platforms)):
+
+```sh
+argocd app actions run hello-staging abort --kind Rollout --group argoproj.io --resource-name hello
+argocd app actions run hello-staging retry --kind Rollout --group argoproj.io --resource-name hello
+argocd app actions run hello-staging promote-full --kind Rollout --group argoproj.io --resource-name hello
+```
+
 ### Look at it as a developer
 
 ```sh

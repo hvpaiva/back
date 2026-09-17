@@ -98,6 +98,12 @@ The numbers come from Traefik, which already counts what it serves by backend an
 
 Two rules keep a deploy from stopping on nothing. A backend under half a request a second isn't judged, because one error out of three requests says nothing about a version, so a canary nobody calls goes through. And if Prometheus can't answer, the canary goes through too, with the error kept in the run: a check the platform can't make doesn't hold a version back ([measured](platform-notes.md#a-check-that-cant-answer-lets-a-canary-through)).
 
+### Stopping a canary is the team's, skipping it is the platform's
+
+Argo CD ships the Rollout's own actions, and each one is a permission of its own. `dev` has `abort` and `retry` on its services: stopping a canary sends every request back to the version that was already serving, and retrying ships what Git already asks for, so neither puts in front of the requests something Git doesn't have. `promote-full` and `skip-current-step` stay with the platform, because both skip the steps and the check the canary is judged by. Whoever is watching a release is who can stop it, and Argo CD records who did.
+
+What a hand action doesn't do is change Git. After an abort the Application reads *Synced* and *Degraded*, the service keeps the version it had, and the way forward is still a commit. The button buys the minute between noticing and the next deploy.
+
 ### The route's weights belong to Argo Rollouts
 
 The services' Applications leave the route's weights out of what they compare, so a canary moving them doesn't turn an Application *OutOfSync*. A sync still writes the route as the chart renders it, though, and `RespectIgnoreDifferences`, the option meant to keep an ignored field's live value, doesn't keep these ([measured](platform-notes.md#a-sync-in-the-middle-of-a-canary-rewrites-the-routes-weights)). So the chart renders them as 100 for the stable version and 0 for the canary, and a rewrite sends every request to the stable version instead of half of them to the canary. The Applications also sync with `ApplyOutOfSyncOnly=true`, so a sync that changes something else doesn't rewrite the route at all.
