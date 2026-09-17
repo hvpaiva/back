@@ -121,6 +121,9 @@ jobs:
       IMAGE: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The version comes from the commits since the last one, so this needs them and their tags.
+          fetch-depth: 0
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.platform-repository }}
@@ -128,9 +131,9 @@ jobs:
           path: .platform
           persist-credentials: false
 
-      - name: Pick the image tag
-        id: tag
-        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Pick the version
+        id: version
+        run: echo "version=$(.platform/scripts/version.sh)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -143,26 +146,38 @@ jobs:
           context: .
           file: ${{ inputs.dockerfile || format('.platform/build/{0}.Dockerfile', inputs.language) }}
           push: true
-          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
-          build-args: VERSION=${{ steps.tag.outputs.tag }}
+          tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+          build-args: VERSION=${{ steps.version.outputs.version }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Commits pushed with the workflow's own token don't start new runs.
-      - name: Deploy to staging
+      # The version the image carries, on the commit it was built from. Tags pushed with the workflow's own
+      # token don't start new runs.
+      - name: Mark the commit with the version
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          yq -i '.image = strenv(IMAGE) + ":" + strenv(TAG)' "$CHART_DIR/values-staging.yaml"
-          if git diff --quiet; then
-            echo "staging already runs $TAG"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "$SERVICE $VERSION is already this commit's version"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore($SERVICE): deploy $TAG to staging"
+          git tag --annotate "v$VERSION" --message "$SERVICE $VERSION"
+          git push origin "v$VERSION"
+
+      - name: Deploy to staging
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          yq -i '.image = strenv(IMAGE) + ":" + strenv(VERSION)' "$CHART_DIR/values-staging.yaml"
+          if git diff --quiet; then
+            echo "staging already runs $VERSION"
+            exit 0
+          fi
+          git commit -am "chore($SERVICE): deploy $VERSION to staging"
           git pull --rebase origin staging
           git push origin HEAD:staging
 

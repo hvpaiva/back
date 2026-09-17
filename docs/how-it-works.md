@@ -29,7 +29,7 @@ database: {}
 
 ```yaml
 # charts/hello/values-production.yaml: only what differs in production
-image: ghcr.io/hvpaiva/back-hello:sha-4f96edd
+image: ghcr.io/hvpaiva/back-hello:1.4.0
 size: medium
 bucket:
   versioning: true
@@ -41,7 +41,7 @@ database:
 
 Before any of that, a pull request gets checked: the delivery workflow renders `charts/hello/` with the platform's chart for each stage, so a typo or a size the platform doesn't offer fails in the pull request, with the chart's own message.
 
-1. Push to `staging`. CI runs the tests, builds the image with the platform's Dockerfile for Go, tags it with the commit (`sha-<commit>`) and commits that image to `values-staging.yaml` on the same branch. In GitHub you see the workflow run and a commit from `github-actions[bot]`.
+1. Push to `staging`. CI runs the tests, reads the next version from the commits since the last one, builds the image with the platform's Dockerfile for Go, tags both the image and the commit with that version, and commits the image to `values-staging.yaml` on the same branch. In GitHub you see the workflow run and a commit from `github-actions[bot]`.
 2. Argo CD notices the commit. It checks the repository every minute, so the `hello-staging` Application goes *OutOfSync*, then *Synced*, and the new version starts as a canary beside the old one: a fifth of the requests for half a minute, then half for another, then all of them. While it runs, the platform watches how those requests come back and sends them all to the old version if too many fail. The Application reads *Suspended* while a step waits and *Healthy* once the canary is done; http://rollouts.localhost shows each step, and Headlamp shows the pods themselves. If the lab has a GitHub App configured, GitHub shows the outcome too: the deployed commit gets an `argocd/hello-staging` status, and the version appears under the repository's Deployments.
 3. The page updates itself. http://hello.staging.localhost reloads when the new version answers, and the hang tag's barcode changes with the version.
 4. Promote with a pull request from `staging` to `main`. Merging it makes CI copy the image staging was running into `values-production.yaml`. Nothing is rebuilt, so production runs exactly what was tested.
