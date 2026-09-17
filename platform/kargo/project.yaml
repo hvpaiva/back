@@ -1,0 +1,5 @@
+# Where every service's pipeline lives, as every service's Application lives in the Argo CD project of the same name.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Project
+metadata:
+  name: apps
