@@ -74,6 +74,10 @@ configs:
       p, role:developer, applications, sync, apps/*, allow
       p, role:developer, logs, get, apps/*, allow
       p, role:developer, projects, get, apps, allow
+      # Stopping a canary sends every request back to the version that was already serving, and trying it again
+      # ships what Git asks for. Skipping the steps, or the check, stays with the platform.
+      p, role:developer, applications, action/argoproj.io/Rollout/abort, apps/*, allow
+      p, role:developer, applications, action/argoproj.io/Rollout/retry, apps/*, allow
       g, dev, role:developer
       g, platform-admin, role:admin
   params:
