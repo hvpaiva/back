@@ -28,7 +28,7 @@ spec:
         startingStep: 1
         args:
           - name: namespace
-            value: {{ .Release.Namespace }}
+            value: {{ include "app.namespace" . }}
           - name: service
             value: {{ .Values.application.name }}-canary
       {{- end }}

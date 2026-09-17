@@ -17,6 +17,11 @@
 {{- end -}}
 {{- end -}}
 
+{{/* The namespace a service runs in: <name>-<stage>, read from the values so that rendering the chart outside a cluster answers the same as Argo CD applying it. */}}
+{{- define "app.namespace" -}}
+{{ .Values.application.name }}-{{ .Values.platform.stage }}
+{{- end -}}
+
 {{- define "app.labels" -}}
 app.kubernetes.io/name: {{ .Values.application.name }}
 back.lab/team: {{ .Values.application.team }}
