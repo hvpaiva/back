@@ -15,7 +15,7 @@ argocd_chart_version=10.8.4
 case ${1:-} in
   plan)
     section "Bringing the lab up"
-    hint "this machine, the cluster, Traefik, the cloud account, Argo CD, the identities and notifications,"
+    hint "this machine, the cluster, Traefik, the cloud account, Argo CD, the identities and the GitHub App,"
     hint "then waiting for Argo CD to deliver the platform and checking it answers: about four minutes"
     hint "what each step's own commands print goes to .logs/lab.log, run after run"
     ;;

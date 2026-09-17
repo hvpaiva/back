@@ -92,7 +92,7 @@ server:
 dex:
   enabled: false
 
-# The GitHub App's credentials Secret comes from `just notifications`, never from Git.
+# The GitHub App's credentials Secret comes from `just github-app`, never from Git.
 notifications:
   argocdUrl: http://argocd.localhost
   secret:

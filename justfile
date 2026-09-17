@@ -15,7 +15,7 @@ docker-ready:
     @docker info >/dev/null 2>&1 || { echo "Docker isn't reachable here: ./setup.sh says what's missing" >&2; exit 1; }
 
 # Create the cluster, the base layer and Argo CD, then wait for Argo CD to deliver the rest (idempotent)
-up: plan preflight cluster gateway cloud argocd identities notifications wait check
+up: plan preflight cluster gateway cloud argocd identities github-app wait check
 
 # What `just up` is about to do, and roughly how long it takes.
 [private]
@@ -46,9 +46,9 @@ argocd:
 identities:
     @scripts/identities.sh
 
-# Give Argo CD the GitHub App it uses to report deployments to GitHub (optional; reads .env)
-notifications:
-    @scripts/notifications.sh
+# Give Argo CD and Kargo the GitHub App they report deployments and push promotions with (reads .env)
+github-app:
+    @scripts/github-app.sh
 
 # Wait until every Argo CD Application is synced and healthy (up to 10 minutes)
 wait:

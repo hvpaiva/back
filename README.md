@@ -104,10 +104,10 @@ Then push a change to your back-hello `staging` branch. CI builds `ghcr.io/<you>
 
 Argo CD can report each deployment back to GitHub: the deployed commit gets an `argocd/<service>-<stage>` status, and your back-hello's Deployments list staging and production with their addresses. It signs in as a GitHub App, which you create once:
 
-1. At https://github.com/settings/apps/new, name the app, set any homepage URL, uncheck *Webhook → Active*, and give it *Read and write* access to *Commit statuses* and *Deployments*.
-2. On the app's page, note the *App ID* and generate a private key. A `.pem` file downloads.
+1. At https://github.com/settings/apps/new, name the app, set any homepage URL, uncheck *Webhook → Active*, and give it *Read and write* access to *Commit statuses*, *Deployments* and *Contents*.
+2. On the app's page, note the *App ID* and the *Client ID*, and generate a private key. A `.pem` file downloads.
 3. Install the app on your account, for your back-hello fork only. The number at the end of the installation's URL is the *Installation ID*.
-4. Copy `.env.example` to `.env`, fill in the three values, and run `just notifications`. `just up` repeats that step whenever it recreates the cluster.
+4. Copy `.env.example` to `.env`, fill in the four values, and run `just github-app`. `just up` repeats that step whenever it recreates the cluster.
 
 ## How it's put together
 
