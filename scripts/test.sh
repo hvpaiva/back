@@ -43,6 +43,20 @@ scripts_area() {
   if attempt "actionlint" actionlint "${workflows[@]}"; then
     ok "actionlint finds nothing in the ${#workflows[@]} workflows"
   fi
+  # A script nobody can run fails where it is called, not here, and a workflow step can swallow that.
+  local script unrunnable=()
+  for script in "${scripts[@]}"; do
+    [[ -x $script ]] && continue
+    # One that another sources is a library: it is read, not run.
+    grep -q "source $script" "${scripts[@]}" && continue
+    unrunnable+=("$script")
+  done
+  if ((${#unrunnable[@]} > 0)); then
+    fail "not executable: ${unrunnable[*]}"
+    hint "chmod +x ${unrunnable[*]}"
+  else
+    ok "every script can be run"
+  fi
 }
 
 argocd_cm() { # output
