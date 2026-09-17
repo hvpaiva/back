@@ -69,10 +69,11 @@ jobs:
           done
           exit $status
 
-  # staging builds unless the push only touched charts/ or docs; main promotes only
-  # when the push changed staging's image, so reverting a promotion isn't undone.
+  # staging builds unless the push only touched charts/ or docs; main promotes only when the push changed
+  # staging's image, so reverting a promotion isn't undone. A run started by hand has no push to read, so
+  # it does whichever its branch is for.
   plan:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
