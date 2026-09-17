@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The lab's identities, each with a kubectl context and an Argo CD password (just identities and argocd-login).
+# The lab's identities, each with a kubectl context and an Argo CD password, and the account Kargo's own
+# UI signs in with (just identities, argocd-login and kargo-password).
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/lib.sh
@@ -57,6 +58,33 @@ set_passwords() {
     --dry-run=client --output yaml | kubectl apply --filename - >/dev/null
 }
 
+# Kargo has no local accounts: its UI takes the admin account or an identity provider, and the lab has neither
+# a provider nor a way to put a password hash in Git, so the chart reads both from a Secret made here.
+kargo_account() {
+  local password hash key
+  kubectl create namespace kargo --dry-run=client --output yaml | kubectl apply --filename - >/dev/null
+  password=$(kubectl --namespace kargo get secret kargo-admin-password \
+    --output jsonpath='{.data.password}' 2>/dev/null | base64 --decode) || password=''
+  hash=$(kubectl --namespace kargo get secret kargo-admin \
+    --output jsonpath='{.data.ADMIN_ACCOUNT_PASSWORD_HASH}' 2>/dev/null | base64 --decode) || hash=''
+  key=$(kubectl --namespace kargo get secret kargo-admin \
+    --output jsonpath='{.data.ADMIN_ACCOUNT_TOKEN_SIGNING_KEY}' 2>/dev/null | base64 --decode) || key=''
+  if [[ -z $password || -z $hash ]]; then
+    password=$(openssl rand -hex 12)
+    hash=$(argocd account bcrypt --password "$password")
+  fi
+  # A new key signs out every session it had issued, so it's generated once and kept.
+  [[ -n $key ]] || key=$(openssl rand -base64 48 | tr -d '=+/' | head -c 32)
+  # Every key here becomes an environment variable of the API server, so the plain password lives beside it.
+  kubectl --namespace kargo create secret generic kargo-admin \
+    --from-literal=ADMIN_ACCOUNT_PASSWORD_HASH="$hash" \
+    --from-literal=ADMIN_ACCOUNT_TOKEN_SIGNING_KEY="$key" \
+    --dry-run=client --output yaml | kubectl apply --filename - >/dev/null
+  kubectl --namespace kargo create secret generic kargo-admin-password \
+    --from-literal=password="$password" \
+    --dry-run=client --output yaml | kubectl apply --filename - >/dev/null
+}
+
 case ${1:-issue} in
   issue)
     section "Identities"
@@ -70,10 +98,12 @@ case ${1:-issue} in
       fi
     done
     set_passwords
+    kargo_account
     for identity in "${identities[@]}"; do
       user=${identity%%:*} group=${identity#*:}
       ok "$user in $group: kubectl --context $user, Argo CD password from just argocd-password $user"
     done
+    ok "admin in Kargo: password from just kargo-password"
     ;;
   check)
     for identity in "${identities[@]}"; do

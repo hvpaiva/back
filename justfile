@@ -62,6 +62,10 @@ argocd-password user="platform-admin":
 argocd-login user="platform-admin":
     @scripts/identities.sh login {{user}}
 
+# Print the password of Kargo's admin account, which its UI signs in with
+kargo-password:
+    @kubectl --namespace kargo get secret kargo-admin-password --output jsonpath='{.data.password}' | base64 --decode && echo
+
 # Print a token to log in to Headlamp (as its ServiceAccount, a cluster admin; valid for 24h)
 headlamp-token:
     @kubectl --namespace headlamp create token headlamp --duration 24h
