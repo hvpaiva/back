@@ -1,0 +1,78 @@
+# hello's pipeline: what counts as a new version of it, and the two stages a version goes through.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: hello
+  namespace: apps
+spec:
+  subscriptions:
+    # A version is the three of these together, so a change to any of them is promoted as one thing.
+    - image:
+        repoURL: ghcr.io/hvpaiva/back-hello
+    - git:
+        repoURL: https://github.com/hvpaiva/back-hello.git
+        branch: main
+        includePaths: [glob:charts/hello/**]
+    - git:
+        repoURL: https://github.com/hvpaiva/back.git
+        branch: main
+        includePaths: [glob:charts/app/**]
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: hello-staging
+  namespace: apps
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: hello
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      steps:
+        - task:
+            name: render
+          vars:
+            - name: service
+              value: hello
+            - name: repoURL
+              value: https://github.com/hvpaiva/back-hello.git
+            - name: image
+              value: ghcr.io/hvpaiva/back-hello
+            - name: stage
+              value: staging
+            - name: route
+              value: gateway
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: hello-production
+  namespace: apps
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: hello
+      sources:
+        # Only a version staging already ran, and whose checks passed there.
+        stages: [hello-staging]
+  promotionTemplate:
+    spec:
+      steps:
+        - task:
+            name: render
+          vars:
+            - name: service
+              value: hello
+            - name: repoURL
+              value: https://github.com/hvpaiva/back-hello.git
+            - name: image
+              value: ghcr.io/hvpaiva/back-hello
+            - name: stage
+              value: production
+            - name: route
+              value: gateway

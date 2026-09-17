@@ -1,0 +1,63 @@
+# What a promotion does, the same way for every service: render the platform's chart with the service's own
+# values, and write the result to the branch that stage runs from. Nothing else writes those branches.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: PromotionTask
+metadata:
+  name: render
+  namespace: apps
+spec:
+  vars:
+    - name: service
+    - name: repoURL
+    - name: image
+    - name: stage
+    - name: route
+    - name: platform
+      value: https://github.com/hvpaiva/back.git
+  steps:
+    # Both repositories are read at the revision this freight carries, so a promotion renders what was tested.
+    - uses: git-clone
+      config:
+        repoURL: ${{ vars.platform }}
+        checkout:
+          - commit: ${{ commitFrom(vars.platform).ID }}
+            path: ./chart
+    - uses: git-clone
+      config:
+        repoURL: ${{ vars.repoURL }}
+        checkout:
+          - commit: ${{ commitFrom(vars.repoURL).ID }}
+            path: ./values
+          # A stage branch holds only what a promotion writes, so the first one starts from an empty history.
+          - branch: stage/${{ vars.stage }}
+            create: true
+            path: ./out
+    - uses: git-clear
+      config:
+        path: ./out
+    - uses: helm-template
+      config:
+        path: ./chart/charts/app
+        releaseName: ${{ vars.service }}
+        namespace: ${{ vars.service }}-${{ vars.stage }}
+        valuesFiles:
+          - ./values/charts/${{ vars.service }}/values.yaml
+          - ./values/charts/${{ vars.service }}/values-${{ vars.stage }}.yaml
+        ignoreMissingValueFiles: true
+        setValues:
+          - key: image
+            value: ${{ vars.image }}:${{ imageFrom(vars.image).Tag }}
+          - key: platform.stage
+            value: ${{ vars.stage }}
+          - key: platform.route
+            value: ${{ vars.route }}
+        outPath: ./out/manifests.yaml
+    - uses: git-commit
+      as: commit
+      config:
+        path: ./out
+        message: ${{ vars.service }} runs ${{ imageFrom(vars.image).Tag }} in ${{ vars.stage }}
+    - uses: git-push
+      config:
+        path: ./out
+        branch: stage/${{ vars.stage }}
